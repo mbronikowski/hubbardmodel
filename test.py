@@ -9,20 +9,20 @@ import basis
 # -Hamiltonian diagonalization
 
 
-sideSize = 2
-numberOfElectrons = 3
-numberOfPositiveSpins = 1
+side_size = 2
+number_of_electrons = 3
+number_of_positive_spins = 1
 
-numberOfHoles = sideSize ** 2
+number_of_holes = side_size ** 2
 
-electronNumberArray = basis.assignNumberToElectronNumber(numberOfHoles)
+electron_number_array = basis.assign_number_to_electron_number(number_of_holes)
 
-print(electronNumberArray)
+print(electron_number_array)
 
-spinlessBasis = basis.getSpinlessBasis(numberOfElectrons, numberOfHoles, electronNumberArray)
+spinless_basis = basis.get_spinless_basis(number_of_electrons, number_of_holes, electron_number_array)
 
-print(spinlessBasis)
+print(spinless_basis)
 
-spinBasis = basis.getSpinBasis(numberOfElectrons, numberOfPositiveSpins, numberOfHoles, electronNumberArray)
+spin_basis = basis.get_spin_basis(number_of_electrons, number_of_positive_spins, number_of_holes, electron_number_array)
 
-print(spinBasis)
+print(spin_basis)
