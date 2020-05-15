@@ -1,49 +1,49 @@
 import numpy as np
 from scipy import special
 
-def assignNumberToElectronNumber(numberOfBits):
-    numberOfPossibleVectors = 2 ** numberOfBits
-    result = np.empty(numberOfPossibleVectors, dtype=int)  # using int, max 7x7 array
-    for i in range(numberOfPossibleVectors):
+
+def assign_number_to_electron_number(number_of_bits):
+    number_of_possible_vectors = 2 ** number_of_bits
+    result = np.empty(number_of_possible_vectors, dtype=int)  # using int, max 7x7 array
+    for i in range(number_of_possible_vectors):
         result[i] = bin(i).count("1")
     return result
 
 
-def getSpinlessBasis(numberOfElectrons, numberOfHoles, electronNumberArray):
-    itNumberArray = np.nditer(electronNumberArray, flags=['f_index'])
-    resultLen = special.comb(numberOfHoles, numberOfElectrons, exact=True)
-    result = np.empty(resultLen, dtype=int)
-    itResult = np.nditer(result, flags=['f_index'])
-    while not itNumberArray.finished:
-        if (itNumberArray[0] == numberOfElectrons):
-            result[itResult.index] = itNumberArray.index
-            itResult.iternext()
-        itNumberArray.iternext()
+def get_spinless_basis(number_of_electrons, number_of_holes, electron_number_array):
+    it_number_array = np.nditer(electron_number_array, flags=['f_index'])
+    result_len = special.comb(number_of_holes, number_of_electrons, exact=True)
+    result = np.empty(result_len, dtype=int)
+    it_result = np.nditer(result, flags=['f_index'])
+    while not it_number_array.finished:
+        if it_number_array[0] == number_of_electrons:
+            result[it_result.index] = it_number_array.index
+            it_result.iternext()
+        it_number_array.iternext()
     return result
 
 
-def getSpinBasis(numberOfElectrons, numberOfPositiveSpins, numberOfHoles, electronNumberArray):
-    numberOfNegativeSpins = numberOfElectrons - numberOfPositiveSpins
+def get_spin_basis(number_of_electrons, number_of_positive_spins, number_of_holes, electron_number_array):
+    number_of_negative_spins = number_of_electrons - number_of_positive_spins
 
-    positiveSpinArray = getSpinlessBasis(numberOfPositiveSpins, numberOfHoles, electronNumberArray)
-    negativeSpinArray = getSpinlessBasis(numberOfNegativeSpins, numberOfHoles, electronNumberArray)
+    positive_spin_array = get_spinless_basis(number_of_positive_spins, number_of_holes, electron_number_array)
+    negative_spin_array = get_spinless_basis(number_of_negative_spins, number_of_holes, electron_number_array)
 
-    resultLen = special.comb(numberOfHoles, numberOfElectrons, exact=True) * special.comb(numberOfElectrons,
-                                                                                          numberOfPositiveSpins,
-                                                                                          exact=True)
-    result = np.empty(shape=(resultLen, 2), dtype=int)
+    result_len = special.comb(number_of_holes, number_of_electrons, exact=True) \
+               * special.comb(number_of_electrons, number_of_positive_spins, exact=True)
+    result = np.empty(shape=(result_len, 2), dtype=int)
 
-    itResult = np.nditer(result, flags=['c_index'])
-    itPositive = np.nditer(positiveSpinArray, flags=['f_index'])
-    while not itPositive.finished:
-        itNegative = np.nditer(negativeSpinArray, flags=['f_index'])
+    it_result = np.nditer(result, flags=['c_index'])
+    it_positive = np.nditer(positive_spin_array, flags=['f_index'])
+    while not it_positive.finished:
+        it_negative = np.nditer(negative_spin_array, flags=['f_index'])
 
-        while not itNegative.finished:
-            if not (itPositive[0] & itNegative[0]):
-                result[itResult.index][0] = itPositive[0]
-                result[itResult.index][1] = itNegative[0]
-                itResult.iternext()
-            itNegative.iternext()
-        itPositive.iternext()
+        while not it_negative.finished:
+            if not (it_positive[0] & it_negative[0]):
+                result[it_result.index][0] = it_positive[0]
+                result[it_result.index][1] = it_negative[0]
+                it_result.iternext()
+            it_negative.iternext()
+        it_positive.iternext()
     return result
-    #this mimics the implementation by Mathematica subteam
+    # this mimics the implementation by Mathematica subteam
