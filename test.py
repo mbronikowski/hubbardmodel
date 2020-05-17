@@ -1,12 +1,12 @@
 import basis
 
 # TODO:
-# -split into main and functions files, perhaps multiple
-# -upload to github
 # -implement visualisations of results (matrix displays, different basis representations etc)
-#	(matplotlib?)
+# (matplotlib?)
 # -Hamiltonians
+# -Convert assign_number_to_electron_number and its use to a private method
 # -Hamiltonian diagonalization
+# For hamiltonian: https://docs.scipy.org/doc/scipy/reference/sparse.html
 
 
 side_size = 2
@@ -15,14 +15,10 @@ number_of_positive_spins = 1
 
 number_of_holes = side_size ** 2
 
-electron_number_array = basis.assign_number_to_electron_number(number_of_holes)
-
-print(electron_number_array)
-
-spinless_basis = basis.get_spinless_basis(number_of_electrons, number_of_holes, electron_number_array)
+spinless_basis = basis.get_spinless_basis(number_of_electrons, number_of_holes)
 
 print(spinless_basis)
 
-spin_basis = basis.get_spin_basis(number_of_electrons, number_of_positive_spins, number_of_holes, electron_number_array)
+spin_basis = basis.get_spin_basis(number_of_electrons, number_of_positive_spins, number_of_holes)
 
 print(spin_basis)
