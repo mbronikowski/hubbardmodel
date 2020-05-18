@@ -13,12 +13,14 @@ side_size = 2
 number_of_electrons = 3
 number_of_positive_spins = 1
 
-number_of_holes = side_size ** 2
+number_of_sites = side_size ** 2
 
-spinless_basis = basis.get_spinless_basis(number_of_electrons, number_of_holes)
+spinless_basis = basis.get_spinless_basis(number_of_electrons, number_of_sites)
 
 print(spinless_basis)
 
-spin_basis = basis.get_spin_basis(number_of_electrons, number_of_positive_spins, number_of_holes)
+spin_basis = basis.get_spin_basis(number_of_electrons, number_of_positive_spins, number_of_sites)
 
 print(spin_basis)
+
+print (spin_basis[:,0])
