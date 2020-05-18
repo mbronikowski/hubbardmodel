@@ -71,10 +71,12 @@ def get_spin_basis(number_of_electrons, number_of_positive_spins, number_of_site
     # Vectors are sorted by increasing first, then second number.
 
 
-def _get_spinless_vector_index(basis, vector):
+def get_spinless_vector_index(basis, vector):
     return np.searchsorted(basis, vector)
 
 
-def _get_spin_vector_index(basis, vector):
-    pass
-
+def get_spin_vector_index(basis, vector):
+    lower_bound = np.searchsorted(basis[:,0], vector[0], side='left')
+    upper_bound = np.searchsorted(basis[:,0], vector[0], side='right')
+    inner_index = np.searchsorted(basis[lower_bound:upper_bound,1], vector[1], side='left')
+    return lower_bound + inner_index

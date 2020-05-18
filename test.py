@@ -23,4 +23,7 @@ spin_basis = basis.get_spin_basis(number_of_electrons, number_of_positive_spins,
 
 print(spin_basis)
 
-print (spin_basis[:,0])
+#print (spin_basis[:,0])
+
+print(basis.get_spin_vector_index(spin_basis, [2, 12]))
+
