@@ -25,5 +25,7 @@ print(spin_basis)
 
 #print (spin_basis[:,0])
 
-print(basis.get_spin_vector_index(spin_basis, [2, 12]))
+#print(basis.get_spin_vector_index(spin_basis, [2, 12]))
+
+print(basis.get_square_electron_hop_lookup())
 
