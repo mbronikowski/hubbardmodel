@@ -99,10 +99,10 @@ def _generate_square_electron_hop_lookup(side_size):
         _electron_hop_square_lookup_side = side_size
         _electron_hop_square_lookup = np.zeros(number_of_sites, dtype=int)
         for i in range(number_of_sites):
-            pattern = (2 ** ((i - side_size) % number_of_sites)) \
-                      | (2 ** ((i + side_size) % number_of_sites)) \
-                      | 2 ** ((i - 1) % side_size + (i // side_size) * side_size) \
-                      | 2 ** ((i + 1) % side_size + (i // side_size) * side_size)
+            pattern = (1 << ((i - side_size) % number_of_sites)) \
+                      | (1 << ((i + side_size) % number_of_sites)) \
+                      | (1 << ((i - 1) % side_size + (i // side_size) * side_size)) \
+                      | (1 << ((i + 1) % side_size + (i // side_size) * side_size))
             _electron_hop_square_lookup[i] = pattern
 
 
