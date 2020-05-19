@@ -43,7 +43,7 @@ def get_spinless_basis(number_of_electrons, number_of_sites):
     # The output array is sorted, allowing for binary searches.
 
 
-def get_spin_basis(number_of_electrons, number_of_positive_spins, number_of_sites):
+def get_constrained_basis(number_of_electrons, number_of_positive_spins, number_of_sites):
     """Generates np array of pairs of numbers which represent positive and negative spins."""
     number_of_negative_spins = number_of_electrons - number_of_positive_spins
 
@@ -79,12 +79,13 @@ def get_spinless_vector_index(basis, vector):
     return np.searchsorted(basis, vector)
 
 
-def get_spin_vector_index(basis, vector):
+def get_constrained_vector_index(basis, vector):
     """Finds the index of a spin vector in the given basis, assuming the basis is sorted."""
     lower_bound = np.searchsorted(basis[:, 0], vector[0], side='left')
     upper_bound = np.searchsorted(basis[:, 0], vector[0], side='right')
     inner_index = np.searchsorted(basis[lower_bound:upper_bound, 1], vector[1], side='left')
     return lower_bound + inner_index
+    # This function will work on the free model too, if the basis is sorted by positive, then negative spin vectors.
 
 
 _electron_hop_square_lookup = np.empty(0)
