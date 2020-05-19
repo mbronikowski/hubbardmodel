@@ -128,7 +128,7 @@ def list_possible_spinless_square_hops(vector, number_of_electrons, side_size):
                         resulting_vectors[1][resulting_vectors[0][0]] = 1
                     else:
                         resulting_vectors[1][resulting_vectors[0][0]] = -1
-    result_view = resulting_vectors[:, 1:resulting_vectors[0][0] + 1]
+    result_view = resulting_vectors[:, 1 : resulting_vectors[0][0] + 1]
     return result_view[:, result_view[0, :].argsort()]
 
 
