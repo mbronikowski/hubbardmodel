@@ -10,7 +10,7 @@ import plotting
 # For hamiltonian: https://docs.scipy.org/doc/scipy/reference/sparse.html
 
 
-side_size = 2
+side_size = 3
 number_of_electrons = 3
 number_of_positive_spins = 1
 
@@ -22,7 +22,7 @@ print(spinless_basis)
 
 spin_basis = basis.get_spin_basis(number_of_electrons, number_of_positive_spins, number_of_sites)
 
-print(spin_basis)
+#print(spin_basis)
 
 #print (spin_basis[:,0])
 
@@ -30,3 +30,4 @@ print(spin_basis)
 
 print(basis.get_square_electron_hop_lookup())
 
+print(basis.list_possible_spinless_square_hops(spinless_basis, 5, 2, 3))

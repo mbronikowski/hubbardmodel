@@ -114,7 +114,7 @@ def get_square_electron_hop_lookup():
 def list_possible_spinless_square_hops(basis, vector, number_of_electrons, side_size):
     _generate_square_electron_hop_lookup(side_size)
     number_of_sites = side_size ** 2
-    resulting_vectors = np.empty(4 * number_of_electrons + 1)   # The 0th element denotes the number of found hops
+    resulting_vectors = np.empty(4 * number_of_electrons + 1, dtype=int)   # The 0th element denotes the number of found hops
     resulting_vectors[0] = 0
     for source_bit in range(number_of_sites):
         if vector >> source_bit & 1:
@@ -122,7 +122,7 @@ def list_possible_spinless_square_hops(basis, vector, number_of_electrons, side_
             for hop_bit in range(number_of_sites):
                 if hops >> hop_bit & 1:
                     resulting_vectors[0] += 1
-                    resulting_vectors[resulting_vectors[0]] = vector | (2 ** hop_bit) & ~ (2 ** source_bit)
+                    resulting_vectors[resulting_vectors[0]] = (vector | (1 << hop_bit)) & ~ (2 ** source_bit)
                     if not (source_bit - hop_bit) % 2:
                         resulting_vectors[resulting_vectors[0]] *= -1
     return resulting_vectors[1:resulting_vectors[0]]
