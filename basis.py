@@ -111,20 +111,36 @@ def get_square_electron_hop_lookup():
     return _electron_hop_square_lookup
 
 
-def list_possible_spinless_square_hops(basis, vector, number_of_electrons, side_size):
+def list_possible_spinless_square_hops(vector, number_of_electrons, side_size):
     _generate_square_electron_hop_lookup(side_size)
     number_of_sites = side_size ** 2
-    resulting_vectors = np.empty(4 * number_of_electrons + 1, dtype=int)   # The 0th element denotes the number of found hops
-    resulting_vectors[0] = 0
+    resulting_vectors = np.empty((2, 4 * number_of_electrons + 1), dtype=int)   # The 0th element holds number of found hops.
+    resulting_vectors[0][0] = 0
     for source_bit in range(number_of_sites):
         if vector >> source_bit & 1:
             hops = _electron_hop_square_lookup[source_bit] & ~ vector
             for hop_bit in range(number_of_sites):
                 if hops >> hop_bit & 1:
-                    resulting_vectors[0] += 1
-                    resulting_vectors[resulting_vectors[0]] = (vector | (1 << hop_bit)) & ~ (2 ** source_bit)
-                    if not (source_bit - hop_bit) % 2:
-                        resulting_vectors[resulting_vectors[0]] *= -1
-    return resulting_vectors[1:resulting_vectors[0]]
+                    resulting_vectors[0][0] += 1
+                    resulting_vectors[0][resulting_vectors[0][0]] = (vector | (1 << hop_bit)) & ~ (2 ** source_bit)
+                    if (source_bit - hop_bit) % 2:
+                        resulting_vectors[1][resulting_vectors[0][0]] = 1
+                    else:
+                        resulting_vectors[1][resulting_vectors[0][0]] = -1
+    result_view = resulting_vectors[:, 1:resulting_vectors[0][0]]
+    return result_view[:, result_view[0, :].argsort()]
 
+
+def spinless_square_hamiltonian(basis, number_of_electrons, side_size):
+    hamiltonian = sparse.dok_matrix((basis.size(), basis.size()), dtype=np.double)
+    it_basis = np.nditer(basis, flags=['f_index'])
+    while not it_basis.finished:
+        vecs_to_add = list_possible_spinless_square_hops(basis[it_basis.index], number_of_electrons, side_size)
+        it_vecs = np.nditer(vecs_to_add, flags=['f_index'])
+        while not it_vecs.finished:
+            hamiltonian[it_basis, get_spinless_vector_index(basis, vecs_to_add[0, it_vecs.index])] \
+                = vecs_to_add[1, it_vecs.index]
+            it_vecs.iternext()
+        it_basis.iternext()
+    return hamiltonian
 
