@@ -11,15 +11,34 @@ import plotting
 
 
 side_size = 2
-number_of_electrons = 3
+number_of_electrons = 1
 number_of_positive_spins = 1
 
-number_of_holes = side_size ** 2
+number_of_sites = side_size ** 2
 
-spinless_basis = basis.get_spinless_basis(number_of_electrons, number_of_holes)
+spinless_basis = basis.get_spinless_basis(number_of_electrons, number_of_sites)
 
 print(spinless_basis)
 
-spin_basis = basis.get_spin_basis(number_of_electrons, number_of_positive_spins, number_of_holes)
+spin_basis = basis.get_spin_basis(number_of_electrons, number_of_positive_spins, number_of_sites)
 
-print(spin_basis)
+# print(spin_basis)
+# print (spin_basis[:,0])
+# print(basis.get_spin_vector_index(spin_basis, [2, 12]))
+
+print("-----")
+plotting.print_square_spinless_vector(1, 2)
+print("-----")
+plotting.print_square_spinless_vector(2, 2)
+print("-----")
+plotting.print_square_spinless_vector(4, 2)
+print("-----")
+plotting.print_square_spinless_vector(8, 2)
+print("-----")
+
+hamiltonian = basis.spinless_square_hamiltonian(spinless_basis, number_of_electrons, side_size)
+
+#tab = basis.list_possible_spinless_square_hops(12, 2, 2)
+#print(tab)
+
+print(hamiltonian.todense())
