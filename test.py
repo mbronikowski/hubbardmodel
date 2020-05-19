@@ -1,4 +1,5 @@
 import basis
+import plotting
 
 # TODO:
 # -implement visualisations of results (matrix displays, different basis representations etc)
