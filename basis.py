@@ -203,7 +203,7 @@ def list_possible_free_square_hops(basis, vector, number_of_positive_spins, numb
 
 def free_square_hamiltonian(basis, number_of_electrons, number_of_positive_spins, side_size):
     number_of_negative_spins = number_of_electrons - number_of_positive_spins
-    hamiltonian = sparse.dok_matrix((basis.size, basis.size), dtype=np.double)
+    hamiltonian = sparse.dok_matrix((basis[:, 0].size, basis[:, 0].size), dtype=np.double)
     it_basis = np.nditer(basis[:, 0], flags=['f_index'])
     while not it_basis.finished:
         vecs_to_add = list_possible_free_square_hops(basis, basis[it_basis.index],

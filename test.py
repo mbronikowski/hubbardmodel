@@ -1,5 +1,8 @@
+import matplotlib.pyplot as plt
 import basis
 import plotting
+from scipy.sparse.linalg import eigsh
+
 
 # TODO:
 # -implement visualisations of results (matrix displays, different basis representations etc)
@@ -28,7 +31,10 @@ print(free_basis)
 
 free_hmltn = basis.free_square_hamiltonian(free_basis, number_of_electrons, number_of_positive_spins, side_size)
 
-print(free_hmltn.todense())
+free_hmltn.tocsr()
+# plt.spy(free_hmltn)
+# plt.show()
+
 
 # hamiltonian = basis.spinless_square_hamiltonian(spinless_basis, number_of_electrons, side_size)
 # print(hamiltonian.todense())
