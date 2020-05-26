@@ -13,6 +13,7 @@ import plotting
 side_size = 2
 number_of_electrons = 3
 number_of_positive_spins = 2
+number_of_negative_spins = number_of_electrons - number_of_positive_spins
 
 number_of_sites = side_size ** 2
 
@@ -25,7 +26,9 @@ free_basis = basis.get_free_basis(number_of_electrons, number_of_positive_spins,
 
 print(free_basis)
 
-print(basis.get_spin_vector_index(free_basis, [5, 4]))
+free_hmltn = basis.free_square_hamiltonian(free_basis, number_of_electrons, number_of_positive_spins, side_size)
+
+print(free_hmltn.todense())
 
 # hamiltonian = basis.spinless_square_hamiltonian(spinless_basis, number_of_electrons, side_size)
 # print(hamiltonian.todense())
