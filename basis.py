@@ -175,7 +175,7 @@ def spinless_square_hamiltonian(basis, number_of_electrons, side_size):
                 = vecs_to_add[1, it_vecs.index]
             it_vecs.iternext()
         it_basis.iternext()
-    return hamiltonian
+    return hamiltonian.tocsr()
 
 
 def list_possible_free_square_hops(basis, vector, number_of_positive_spins, number_of_negative_spins, side_size):
@@ -214,7 +214,7 @@ def free_square_hamiltonian(basis, number_of_electrons, number_of_positive_spins
             hamiltonian[it_basis.index, it_vecs[0]] = vecs_to_add[1, it_vecs.index]
             it_vecs.iternext()
         it_basis.iternext()
-    return hamiltonian
+    return hamiltonian.tocsr()
 
 
 def list_possible_constrained_square_hops():
