@@ -181,23 +181,24 @@ def spinless_square_hamiltonian(basis, number_of_electrons, side_size):
 def list_possible_free_square_hops(basis, vector, number_of_positive_spins, number_of_negative_spins, side_size):
     positive_hops = list_possible_spinless_square_hops(vector[0], number_of_positive_spins, side_size)
     negative_hops = list_possible_spinless_square_hops(vector[1], number_of_negative_spins, side_size)
-    resulting_vectors = np.empty((2, positive_hops[0].size + negative_hops[0].size), dtype=int)
-    negative_insert_index = np.searchsorted(positive_hops[0], vector[0])
+    resulting_vectors = np.zeros((2, positive_hops[0].size + negative_hops[0].size), dtype=int)
+    negative_insert_index = np.searchsorted(positive_hops[0, :], vector[0])
     it_positive = np.nditer(positive_hops[0, :], flags=['c_index'])
     it_negative = np.nditer(negative_hops[0, :], flags=['c_index'])
     it_result = np.nditer(resulting_vectors[0, :], flags=['c_index'])
-    while not it_positive.finished:
-        if it_positive.index == negative_insert_index:
+    while not it_result.finished:
+        if it_result.index != negative_insert_index:
+            resulting_vectors[0, it_result.index] = get_spin_vector_index(basis, [it_positive[0], vector[1]])
+            resulting_vectors[1, it_result.index] = positive_hops[1, it_positive.index]
+            it_positive.iternext()
+            it_result.iternext()
+        else:
             while not it_negative.finished:
                 resulting_vectors[0, it_result.index] \
                     = get_spin_vector_index(basis, [vector[0], it_negative[0]])
                 resulting_vectors[1, it_result.index] = negative_hops[1, it_negative.index]
                 it_negative.iternext()
                 it_result.iternext()
-        resulting_vectors[0, it_result.index] = get_spin_vector_index(basis, [it_positive[0], vector[1]])
-        resulting_vectors[1, it_result.index] = positive_hops[1, it_positive.index]
-        it_positive.iternext()
-        it_result.iternext()
     return resulting_vectors
 
 

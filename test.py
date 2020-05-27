@@ -32,9 +32,10 @@ print(free_basis)
 free_hmltn = basis.free_square_hamiltonian(free_basis, number_of_electrons, number_of_positive_spins, side_size)
 
 free_hmltn.tocsr()
-# plt.spy(free_hmltn)
-# plt.show()
+plt.spy(free_hmltn)
+plt.show()
 
+# print(eigsh(free_hmltn, k=20))
 
 # hamiltonian = basis.spinless_square_hamiltonian(spinless_basis, number_of_electrons, side_size)
 # print(hamiltonian.todense())
