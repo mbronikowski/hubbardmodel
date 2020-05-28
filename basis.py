@@ -145,6 +145,7 @@ def get_square_electron_hop_lookup():
 
 
 def list_possible_spinless_square_hops(vector, number_of_electrons, side_size):
+    """Returns all possible vectors (in vector form) for any given hop along with its sign."""
     _generate_square_electron_hop_lookup(side_size)
     number_of_sites = side_size ** 2
     resulting_vectors = np.empty((2, 4 * number_of_electrons + 1), dtype=int)
@@ -178,10 +179,10 @@ def spinless_square_hamiltonian(basis, number_of_electrons, side_size):
     return hamiltonian.tocsr()
 
 
-def list_possible_free_square_hops(basis, vector, number_of_positive_spins, number_of_negative_spins, side_size):
+def list_possible_free_square_hop_indices(basis, vector, number_of_positive_spins, number_of_negative_spins, side_size):
     positive_hops = list_possible_spinless_square_hops(vector[0], number_of_positive_spins, side_size)
     negative_hops = list_possible_spinless_square_hops(vector[1], number_of_negative_spins, side_size)
-    resulting_vectors = np.zeros((2, positive_hops[0].size + negative_hops[0].size), dtype=int)
+    resulting_vectors = np.empty((2, positive_hops[0].size + negative_hops[0].size), dtype=int)
     negative_insert_index = np.searchsorted(positive_hops[0, :], vector[0])
     it_positive = np.nditer(positive_hops[0, :], flags=['c_index'])
     it_negative = np.nditer(negative_hops[0, :], flags=['c_index'])
@@ -195,7 +196,7 @@ def list_possible_free_square_hops(basis, vector, number_of_positive_spins, numb
         else:
             while not it_negative.finished:
                 resulting_vectors[0, it_result.index] \
-                    = get_spin_vector_index(basis, [vector[0], it_negative[0]])
+                    = get_spin_vector_index(basis, (vector[0], it_negative[0]))
                 resulting_vectors[1, it_result.index] = negative_hops[1, it_negative.index]
                 it_negative.iternext()
                 it_result.iternext()
@@ -207,8 +208,8 @@ def free_square_hamiltonian(basis, number_of_electrons, number_of_positive_spins
     hamiltonian = sparse.dok_matrix((basis[:, 0].size, basis[:, 0].size), dtype=np.double)
     it_basis = np.nditer(basis[:, 0], flags=['f_index'])
     while not it_basis.finished:
-        vecs_to_add = list_possible_free_square_hops(basis, basis[it_basis.index],
-                                                     number_of_positive_spins, number_of_negative_spins, side_size)
+        vecs_to_add = list_possible_free_square_hop_indices(basis, basis[it_basis.index],
+                                                            number_of_positive_spins, number_of_negative_spins, side_size)
         it_vecs = np.nditer(vecs_to_add[0, :], flags=['c_index'])
         while not it_vecs.finished:
             hamiltonian[it_basis.index, it_vecs[0]] = vecs_to_add[1, it_vecs.index]
@@ -217,9 +218,48 @@ def free_square_hamiltonian(basis, number_of_electrons, number_of_positive_spins
     return hamiltonian.tocsr()
 
 
-def list_possible_constrained_square_hops():
-    pass
+def list_possible_constrained_square_hop_indices(basis, vector, number_of_positive_spins,
+                                                 number_of_negative_spins, side_size):
+    positive_hops = list_possible_spinless_square_hops(vector[0], number_of_positive_spins, side_size)
+    negative_hops = list_possible_spinless_square_hops(vector[1], number_of_negative_spins, side_size)
+    resulting_vectors = np.empty((2, positive_hops[0].size + negative_hops[0].size), dtype=int)
+    negative_insert_index = np.searchsorted(positive_hops[0, :], vector[0])
+    it_positive = np.nditer(positive_hops[0, :], flags=['c_index'])
+    it_negative = np.nditer(negative_hops[0, :], flags=['c_index'])
+    it_result = np.nditer(resulting_vectors[0, :], flags=['c_index'])
+    while not (it_positive.finished and it_negative.finished):
+        if (not it_positive.finished) and it_positive.index != negative_insert_index:
+            if not (it_positive[0] & vector[1]):
+                resulting_vectors[0, it_result.index] = get_spin_vector_index(basis, (it_positive[0], vector[1]))
+                resulting_vectors[1, it_result.index] = positive_hops[1, it_positive.index]
+                it_result.iternext()
+            it_positive.iternext()
+        else:
+            while not it_negative.finished:
+                if not (vector[0] & it_negative[0]):
+                    resulting_vectors[0, it_result.index] \
+                        = get_spin_vector_index(basis, (vector[0], it_negative[0]))
+                    resulting_vectors[1, it_result.index] = negative_hops[1, it_negative.index]
+                    it_result.iternext()
+                it_negative.iternext()
+            negative_insert_index = -1
+    if it_result.finished:
+        return resulting_vectors
+    return resulting_vectors[:, 0 : it_result.index]
 
 
-def constrained_square_hamiltonian():
-    pass
+def constrained_square_hamiltonian(basis, number_of_electrons, number_of_positive_spins, side_size):
+    number_of_negative_spins = number_of_electrons - number_of_positive_spins
+    hamiltonian = sparse.dok_matrix((basis[:, 0].size, basis[:, 0].size), dtype=np.double)
+    it_basis = np.nditer(basis[:, 0], flags=['f_index'])
+    while not it_basis.finished:
+        vecs_to_add = list_possible_constrained_square_hop_indices(basis, basis[it_basis.index],
+                                                                   number_of_positive_spins, number_of_negative_spins,
+                                                                   side_size)
+        it_vecs = np.nditer(vecs_to_add[0, :], flags=['c_index'])
+        while not it_vecs.finished:
+            hamiltonian[it_basis.index, it_vecs[0]] = vecs_to_add[1, it_vecs.index]
+            it_vecs.iternext()
+        it_basis.iternext()
+    return hamiltonian.tocsr()
+
