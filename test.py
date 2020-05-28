@@ -13,9 +13,9 @@ from scipy.sparse.linalg import eigsh
 # For hamiltonian: https://docs.scipy.org/doc/scipy/reference/sparse.html
 
 
-side_size = 2
-number_of_electrons = 3
-number_of_positive_spins = 2
+side_size = 3
+number_of_electrons = 4
+number_of_positive_spins = 3
 number_of_negative_spins = number_of_electrons - number_of_positive_spins
 
 number_of_sites = side_size ** 2
@@ -27,12 +27,16 @@ print(spinless_basis)
 constrained_basis = basis.get_constrained_basis(number_of_electrons, number_of_positive_spins, number_of_sites)
 free_basis = basis.get_free_basis(number_of_electrons, number_of_positive_spins, number_of_sites)
 
-print(free_basis)
+print(constrained_basis)
+
+
+# print(free_basis)
 
 free_hmltn = basis.free_square_hamiltonian(free_basis, number_of_electrons, number_of_positive_spins, side_size)
 
-free_hmltn.tocsr()
-plt.spy(free_hmltn)
+constr_hmltn = basis.constrained_square_hamiltonian(constrained_basis, number_of_electrons, number_of_positive_spins, side_size)
+
+plt.spy(constr_hmltn, ms=1)
 plt.show()
 
 # print(eigsh(free_hmltn, k=20))
