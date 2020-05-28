@@ -188,7 +188,7 @@ def list_possible_free_square_hops(basis, vector, number_of_positive_spins, numb
     it_result = np.nditer(resulting_vectors[0, :], flags=['c_index'])
     while not it_result.finished:
         if it_result.index != negative_insert_index:
-            resulting_vectors[0, it_result.index] = get_spin_vector_index(basis, [it_positive[0], vector[1]])
+            resulting_vectors[0, it_result.index] = get_spin_vector_index(basis, (it_positive[0], vector[1]))
             resulting_vectors[1, it_result.index] = positive_hops[1, it_positive.index]
             it_positive.iternext()
             it_result.iternext()
