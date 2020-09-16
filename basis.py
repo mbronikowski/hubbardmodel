@@ -2,6 +2,35 @@ import numpy as np
 from scipy import special, sparse
 
 
+_number_of_electrons = 0
+_number_of_positive_spins = 0
+_number_of_negative_spins = 0
+_side_size = 0
+_number_of_sites = 0
+
+
+def initialize_square_model(side_size, number_of_electrons, number_of_positive_spins):
+    global _number_of_electrons
+    global _number_of_positive_spins
+    global _number_of_negative_spins
+    global _side_size
+    global _number_of_sites
+    _number_of_electrons = number_of_electrons
+    _number_of_positive_spins = number_of_positive_spins
+    _number_of_negative_spins = number_of_electrons - number_of_positive_spins
+    _side_size = side_size
+    _number_of_sites = side_size ** 2
+
+
+def initialize_bases():
+    global _spinless_basis
+    global _free_basis
+    global _constrained_basis
+    _spinless_basis = _generate_spinless_basis(_number_of_electrons, _number_of_sites)
+    _free_basis = _generate_free_basis(_number_of_electrons, _number_of_positive_spins, _number_of_sites)
+    _constrained_basis = _generate_constrained_basis(_number_of_electrons, _number_of_positive_spins, _number_of_sites)
+
+
 def _assign_number_to_electron_number(number_of_bits):
     """Generates np array LUT which assigns number to its number of electrons."""
     global _electron_number_array
@@ -22,7 +51,12 @@ def get_electron_number_array():
     return _electron_number_array
 
 
-def get_spinless_basis(number_of_electrons, number_of_sites):
+_spinless_basis = np.empty(0)
+_free_basis = np.empty(0)
+_constrained_basis = np.empty(0)
+
+
+def _generate_spinless_basis(number_of_electrons, number_of_sites):
     """Generates np array of number form vectors for a given number of holes.
 
     The function uses the lookup table _electron_number_array. In case the array has not yet been generated,
@@ -43,15 +77,15 @@ def get_spinless_basis(number_of_electrons, number_of_sites):
     # The output array is sorted, allowing for binary searches.
 
 
-def get_free_basis(number_of_electrons, number_of_positive_spins, number_of_sites):
+def _generate_free_basis(number_of_electrons, number_of_positive_spins, number_of_sites):
     """Generates np array of pairs of numbers which represent positive and negative spins in a free model."""
     number_of_negative_spins = number_of_electrons - number_of_positive_spins
 
-    positive_spin_array = get_spinless_basis(number_of_positive_spins, number_of_sites)
+    positive_spin_array = _generate_spinless_basis(number_of_positive_spins, number_of_sites)
     if number_of_positive_spins == number_of_negative_spins:
         negative_spin_array = positive_spin_array
     else:
-        negative_spin_array = get_spinless_basis(number_of_negative_spins, number_of_sites)
+        negative_spin_array = _generate_spinless_basis(number_of_negative_spins, number_of_sites)
 
     result_len = positive_spin_array.size * negative_spin_array.size
     result = np.empty(shape=(result_len, 2), dtype=int)
@@ -70,15 +104,15 @@ def get_free_basis(number_of_electrons, number_of_positive_spins, number_of_site
     # Vectors are sorted by increasing first, then second number.
 
 
-def get_constrained_basis(number_of_electrons, number_of_positive_spins, number_of_sites):
+def _generate_constrained_basis(number_of_electrons, number_of_positive_spins, number_of_sites):
     """Generates np array of pairs of numbers which represent positive and negative spins in a constrained model."""
     number_of_negative_spins = number_of_electrons - number_of_positive_spins
 
-    positive_spin_array = get_spinless_basis(number_of_positive_spins, number_of_sites)
+    positive_spin_array = _generate_spinless_basis(number_of_positive_spins, number_of_sites)
     if number_of_positive_spins == number_of_negative_spins:
         negative_spin_array = positive_spin_array
     else:
-        negative_spin_array = get_spinless_basis(number_of_negative_spins, number_of_sites)
+        negative_spin_array = _generate_spinless_basis(number_of_negative_spins, number_of_sites)
 
     result_len = special.comb(number_of_sites, number_of_electrons, exact=True) \
                * special.comb(number_of_electrons, number_of_positive_spins, exact=True)
@@ -263,3 +297,38 @@ def constrained_square_hamiltonian(basis, number_of_electrons, number_of_positiv
         it_basis.iternext()
     return hamiltonian.tocsr()
 
+
+def _multiply_vec_by_spinless(vec):
+    """Private function to be used by the scipy.sparse.linalg.LinearOperator class as a spinless Hamiltonian substitute.
+
+    The function works by taking each basis component, computing its resulting vector and adding that to the result.
+    It heavily utilizes list_possible_spinless_square_hops()."""
+    if vec.shape[0] != _spinless_basis.shape[0]:                            # TODO: change to automatic basis generation
+        raise ValueError("Wrong spinless basis passed to LinearOperator")   # as a fallback or move basis validity check
+    result = np.zeros(vec.shape[0], dtype=np.double)                        # elsewhere.
+    it_vec = np.nditer(vec, flags=['f_index'])
+    while not it_vec.finished:
+        if vec[it_vec.index] != 0:
+            vecs_to_add = list_possible_spinless_square_hops(_spinless_basis[it_vec.index],
+                                                             _number_of_electrons, _side_size)
+            for i in range(vecs_to_add.shape[1]):
+                result[get_spinless_vector_index(_spinless_basis, vecs_to_add[0][i])] \
+                    += vec[it_vec.index] * vecs_to_add[1][i]
+        it_vec.iternext()
+    return result
+
+
+def _multiply_vec_by_free(vec):                         # TODO: TEST THIS FUNCTION
+    if vec.shape[0] != _free_basis.shape[0]:                                # TODO: change to automatic basis generation
+        raise ValueError("Wrong spinless basis passed to LinearOperator")   # as a fallback or move basis validity check
+    result = np.zeros(vec.shape[0], dtype=np.double)
+    it_vec = np.nditer(vec, flags=['f_index'])
+    while not it_vec.finished:
+        if vec[it_vec.index] != 0:
+            vecs_to_add = list_possible_free_square_hop_indices(_free_basis, _free_basis[it_vec.index],
+                                                                _number_of_positive_spins, _number_of_negative_spins,
+                                                                _side_size)
+            for i in range(vecs_to_add.shape[1]):
+                result[vecs_to_add[0][i]] += vec[it_vec.index] * vecs_to_add[1][i]
+        it_vec.iternext()
+    return result
