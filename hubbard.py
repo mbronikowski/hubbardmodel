@@ -243,7 +243,8 @@ def free_square_hamiltonian(basis, number_of_electrons, number_of_positive_spins
     it_basis = np.nditer(basis[:, 0], flags=['f_index'])
     while not it_basis.finished:
         vecs_to_add = list_possible_free_square_hop_indices(basis, basis[it_basis.index],
-                                                            number_of_positive_spins, number_of_negative_spins, side_size)
+                                                            number_of_positive_spins, number_of_negative_spins,
+                                                            side_size)
         it_vecs = np.nditer(vecs_to_add[0, :], flags=['c_index'])
         while not it_vecs.finished:
             hamiltonian[it_basis.index, it_vecs[0]] = vecs_to_add[1, it_vecs.index]
@@ -318,6 +319,24 @@ def _multiply_vec_by_spinless(vec):
     return result
 
 
+def _multiply_vec_by_constrained(vec):                         # TODO: TEST THIS FUNCTION
+    if vec.shape[0] != _constrained_basis.shape[0]:                         # TODO: change to automatic basis generation
+        raise ValueError("Wrong spinless basis passed to LinearOperator")   # as a fallback or move basis validity check
+    result = np.zeros(vec.shape[0], dtype=np.double)
+    it_vec = np.nditer(vec, flags=['f_index'])
+    while not it_vec.finished:
+        if vec[it_vec.index] != 0:
+            vecs_to_add = list_possible_constrained_square_hop_indices(_constrained_basis,
+                                                                       _constrained_basis[it_vec.index],
+                                                                       _number_of_positive_spins,
+                                                                       _number_of_negative_spins,
+                                                                       _side_size)
+            for i in range(vecs_to_add.shape[1]):
+                result[vecs_to_add[0][i]] += vec[it_vec.index] * vecs_to_add[1][i]
+        it_vec.iternext()
+    return result
+
+
 def _multiply_vec_by_free(vec):                         # TODO: TEST THIS FUNCTION
     if vec.shape[0] != _free_basis.shape[0]:                                # TODO: change to automatic basis generation
         raise ValueError("Wrong spinless basis passed to LinearOperator")   # as a fallback or move basis validity check
@@ -332,3 +351,14 @@ def _multiply_vec_by_free(vec):                         # TODO: TEST THIS FUNCTI
                 result[vecs_to_add[0][i]] += vec[it_vec.index] * vecs_to_add[1][i]
         it_vec.iternext()
     return result
+
+
+def spinless_spectral_absorption(basis_abs, basis_orig, ground_state, size_size, k_list):
+    # abs - absorbed, orig - original
+    result = np.zeros(basis_abs.shape[0], dtype=complex)                          # TODO: NORMALIZE INPUT GROUND VECTOR
+    for i in range(ground_state.shape[0]):
+        pass
+
+
+def spinless_spectral_emission():
+    pass
