@@ -2,69 +2,131 @@ import numpy as np
 from scipy import special, sparse
 
 
-_number_of_electrons = 0
-_number_of_positive_spins = 0
-_number_of_negative_spins = 0
-_side_size = 0
-_number_of_sites = 0
+class LUTManager:
+    """LUTManager is the class for LUTM, this project's lookup table manager.
+
+    Any LUT access in the module is managed by this class. It holds the dictionaries for arrays which assign
+    the number of electrons to each bit representation of a given length and for a lookup table of possible hops made
+    by an electron on a square grid."""
+
+    def __init__(self):
+        self._electron_number_dict = {}  # Assigns bit representation to the number of electrons it contains.
+        self._square_hop_dict = {}  # Contains bit representation of possible hops of an electron on an empty grid.
+
+    def get_electron_number_lut(self, number_of_bits):
+        if number_of_bits not in self._electron_number_dict:
+            self.add_electron_number_lut(number_of_bits)
+        return self._electron_number_dict[number_of_bits]
+
+    def get_square_hop_lut(self, side_size):
+        if side_size not in self._square_hop_dict:
+            self.add_square_hop_lut(side_size)
+        return self._square_hop_dict[side_size]
+
+    def add_electron_number_lut(self, number_of_bits):
+        number_of_possible_vectors = 2 ** number_of_bits
+        new_electron_number_array = np.empty(number_of_possible_vectors, dtype=int)   # The array uses int, allowing for
+        for i in range(number_of_possible_vectors):                                   # at most a 5x5 atom grid.
+            new_electron_number_array[i] = bin(i).count("1")                          # More would require 'long'.
+        self._electron_number_dict[number_of_bits] = new_electron_number_array
+
+    def add_square_hop_lut(self, side_size):
+        number_of_sites = side_size ** 2
+        new_square_hop_lut = np.zeros(number_of_sites, dtype=int)
+        for i in range(number_of_sites):
+            pattern = (1 << ((i - side_size) % number_of_sites)) \
+                      | (1 << ((i + side_size) % number_of_sites)) \
+                      | (1 << ((i - 1) % side_size + (i // side_size) * side_size)) \
+                      | (1 << ((i + 1) % side_size + (i // side_size) * side_size))
+            new_square_hop_lut[i] = pattern
+        self._square_hop_dict[side_size] = new_square_hop_lut
 
 
-def initialize_square_model(side_size, number_of_electrons, number_of_positive_spins):
-    global _number_of_electrons
-    global _number_of_positive_spins
-    global _number_of_negative_spins
-    global _side_size
-    global _number_of_sites
-    _number_of_electrons = number_of_electrons
-    _number_of_positive_spins = number_of_positive_spins
-    _number_of_negative_spins = number_of_electrons - number_of_positive_spins
-    _side_size = side_size
-    _number_of_sites = side_size ** 2
+LUTM = LUTManager()
 
 
-def initialize_bases():
-    global _spinless_basis
-    global _free_basis
-    global _constrained_basis
-    _spinless_basis = _generate_spinless_basis(_number_of_electrons, _number_of_sites)
-    _free_basis = _generate_free_basis(_number_of_electrons, _number_of_positive_spins, _number_of_sites)
-    _constrained_basis = _generate_constrained_basis(_number_of_electrons, _number_of_positive_spins, _number_of_sites)
+class SquareModel:
+    def __init__(self, number_of_electrons, number_of_positive_spins, side_size):
+        self.no_electrons = number_of_electrons
+        self.no_plus_spins = number_of_positive_spins
+        self.no_minus_spins = number_of_electrons - number_of_positive_spins
+        self.side = side_size
+        self.no_atoms = side_size ** 2
+        self.spinless_basis = generate_spinless_basis(self.no_electrons, self.no_atoms)
+        self.free_basis = generate_free_basis(self.no_electrons, self.no_plus_spins, self.no_atoms)
+        self.constrained_basis = generate_constrained_basis(self.no_electrons, self.no_plus_spins, self.no_atoms)
+        self.spinless_hamiltonian_exists = False
+        self.free_hamiltonian_exists = False
+        self.constrained_hamiltonian_exists = False
+        self.spinless_hamiltonian = None
+        self.free_hamiltonian = None
+        self.constrained_hamiltonian = None
+
+    def spinless_multiply_vec_no_hmltn(self, vec):
+        """Multiplies a vector by the model's spinless Hamiltonian without its explicit representation."""
+        result = np.zeros(vec.shape[0], dtype=np.double)
+        it_vec = np.nditer(vec, flags=['f_index'])
+        while not it_vec.finished:
+            if vec[it_vec.index] != 0:
+                vecs_to_add = list_possible_spinless_square_hops(self.spinless_basis[it_vec.index],
+                                                                 self.no_electrons, self.side)
+                for i in range(vecs_to_add.shape[1]):
+                    result[get_spinless_vector_index(self.spinless_basis, vecs_to_add[0][i])] \
+                        += vec[it_vec.index] * vecs_to_add[1][i]
+            it_vec.iternext()
+        return result
+
+    def free_multiply_vec_no_hmltn(self, vec):  # TODO: TEST THIS FUNCTION
+        """Multiplies a vector by the model's free Hamiltonian without its explicit representation."""
+        result = np.zeros(vec.shape[0], dtype=np.double)
+        it_vec = np.nditer(vec, flags=['f_index'])
+        while not it_vec.finished:
+            if vec[it_vec.index] != 0:
+                vecs_to_add = list_possible_free_square_hop_indices(self.free_basis, self.free_basis[it_vec.index],
+                                                                    self.no_plus_spins, self.no_minus_spins, self.side)
+                for i in range(vecs_to_add.shape[1]):
+                    result[vecs_to_add[0][i]] += vec[it_vec.index] * vecs_to_add[1][i]
+            it_vec.iternext()
+        return result
+
+    def constrained_multiply_vec_no_hmltn(self, vec):  # TODO: TEST THIS FUNCTION
+        """Multiplies a vector by the model's constrained Hamiltonian without its explicit representation."""
+        result = np.zeros(vec.shape[0], dtype=np.double)
+        it_vec = np.nditer(vec, flags=['f_index'])
+        while not it_vec.finished:
+            if vec[it_vec.index] != 0:
+                vecs_to_add = list_possible_constrained_square_hop_indices(self.constrained_basis,
+                                                                           self.constrained_basis[it_vec.index],
+                                                                           self.no_plus_spins, self.no_minus_spins,
+                                                                           self.side)
+                for i in range(vecs_to_add.shape[1]):
+                    result[vecs_to_add[0][i]] += vec[it_vec.index] * vecs_to_add[1][i]
+            it_vec.iternext()
+        return result
+
+    def _generate_spinless_hamiltonian(self):
+        self.spinless_hamiltonian = spinless_square_hamiltonian(self.spinless_basis, self.no_electrons, self.side)
+        self.spinless_hamiltonian_exists = True
+
+    def _generate_free_hamiltonian(self):
+        self.free_hamiltonian = free_square_hamiltonian(self.free_basis, self.no_electrons,
+                                                        self.no_plus_spins, self.side)
+        self.free_hamiltonian_exists = True
+
+    def _generate_constrained_hamiltonian(self):
+        self.constrained_hamiltonian = constrained_square_hamiltonian(self.constrained_basis, self.no_electrons,
+                                                                      self.no_plus_spins, self.side)
+        self.constrained_hamiltonian_exists = True
 
 
-def _assign_number_to_electron_number(number_of_bits):
-    """Generates np array LUT which assigns number to its number of electrons."""
-    global _electron_number_array
-    global _electron_number_array_size
-    number_of_possible_vectors = 2 ** number_of_bits
-    _electron_number_array = np.empty(number_of_possible_vectors, dtype=int)  # using int, max 7x7 array
-    for i in range(number_of_possible_vectors):
-        _electron_number_array[i] = bin(i).count("1")
-    _electron_number_array_size = number_of_bits
-
-
-_electron_number_array_size = 0
-_electron_number_array = np.empty(0)
-
-
-def get_electron_number_array():
-    """Public function which shows the private LUT generated by _assign_number_to_electron_number."""
-    return _electron_number_array
-
-
-_spinless_basis = np.empty(0)
-_free_basis = np.empty(0)
-_constrained_basis = np.empty(0)
-
-
-def _generate_spinless_basis(number_of_electrons, number_of_sites):
+def generate_spinless_basis(number_of_electrons, number_of_sites):
     """Generates np array of number form vectors for a given number of holes.
 
     The function uses the lookup table _electron_number_array. In case the array has not yet been generated,
     the function will call _assign_number_to_electron_number to generate it first.
     """
-    if number_of_sites != _electron_number_array_size:
-        _assign_number_to_electron_number(number_of_sites)
-    it_number_array = np.nditer(_electron_number_array, flags=['f_index'])
+    electron_number_array = LUTM.get_electron_number_lut(number_of_sites)
+    it_number_array = np.nditer(electron_number_array, flags=['f_index'])
     result_len = special.comb(number_of_sites, number_of_electrons, exact=True)
     result = np.empty(result_len, dtype=int)
     it_result = np.nditer(result, flags=['f_index'])
@@ -77,22 +139,22 @@ def _generate_spinless_basis(number_of_electrons, number_of_sites):
     # The output array is sorted, allowing for binary searches.
 
 
-def _generate_free_basis(number_of_electrons, number_of_positive_spins, number_of_sites):
+def generate_free_basis(number_of_electrons, number_of_positive_spins, number_of_sites):
     """Generates np array of pairs of numbers which represent positive and negative spins in a free model."""
     number_of_negative_spins = number_of_electrons - number_of_positive_spins
 
-    positive_spin_array = _generate_spinless_basis(number_of_positive_spins, number_of_sites)
+    positive_spin_array = generate_spinless_basis(number_of_positive_spins, number_of_sites)
     if number_of_positive_spins == number_of_negative_spins:
         negative_spin_array = positive_spin_array
     else:
-        negative_spin_array = _generate_spinless_basis(number_of_negative_spins, number_of_sites)
+        negative_spin_array = generate_spinless_basis(number_of_negative_spins, number_of_sites)
 
     result_len = positive_spin_array.size * negative_spin_array.size
     result = np.empty(shape=(result_len, 2), dtype=int)
 
-    it_result = np.nditer(result, flags=['c_index'])                 # Iterator is defined over the entire list,
+    it_result = np.nditer(result, flags=['c_index'])  # Iterator is defined over the entire list,
     it_positive = np.nditer(positive_spin_array, flags=['f_index'])  # but the function quits before it goes too far.
-    while not it_positive.finished:                                  # TODO: fix it here and in constrained basis gen.
+    while not it_positive.finished:  # TODO: fix it here and in constrained basis gen.
         it_negative = np.nditer(negative_spin_array, flags=['f_index'])
         while not it_negative.finished:
             result[it_result.index][0] = it_positive[0]
@@ -104,25 +166,24 @@ def _generate_free_basis(number_of_electrons, number_of_positive_spins, number_o
     # Vectors are sorted by increasing first, then second number.
 
 
-def _generate_constrained_basis(number_of_electrons, number_of_positive_spins, number_of_sites):
+def generate_constrained_basis(number_of_electrons, number_of_positive_spins, number_of_sites):
     """Generates np array of pairs of numbers which represent positive and negative spins in a constrained model."""
     number_of_negative_spins = number_of_electrons - number_of_positive_spins
 
-    positive_spin_array = _generate_spinless_basis(number_of_positive_spins, number_of_sites)
+    positive_spin_array = generate_spinless_basis(number_of_positive_spins, number_of_sites)
     if number_of_positive_spins == number_of_negative_spins:
         negative_spin_array = positive_spin_array
     else:
-        negative_spin_array = _generate_spinless_basis(number_of_negative_spins, number_of_sites)
+        negative_spin_array = generate_spinless_basis(number_of_negative_spins, number_of_sites)
 
     result_len = special.comb(number_of_sites, number_of_electrons, exact=True) \
                * special.comb(number_of_electrons, number_of_positive_spins, exact=True)
     result = np.empty(shape=(result_len, 2), dtype=int)
 
-    it_result = np.nditer(result, flags=['c_index'])                 # Iterator is defined over the entire list,
+    it_result = np.nditer(result, flags=['c_index'])  # Iterator is defined over the entire list,
     it_positive = np.nditer(positive_spin_array, flags=['f_index'])  # but the function quits before it goes too far.
     while not it_positive.finished:
         it_negative = np.nditer(negative_spin_array, flags=['f_index'])
-
         while not it_negative.finished:
             if not (it_positive[0] & it_negative[0]):
                 result[it_result.index][0] = it_positive[0]
@@ -153,40 +214,15 @@ def get_spin_vector_index(basis, vector):
     return lower_bound + inner_index
 
 
-_electron_hop_square_lookup = np.empty(0)
-_electron_hop_square_lookup_side = 0
-
-
-def _generate_square_electron_hop_lookup(side_size):
-    """Generates a private array of possible hops of an electron on an empty square with side side_size."""
-    global _electron_hop_square_lookup
-    global _electron_hop_square_lookup_side
-    if _electron_hop_square_lookup_side != side_size:
-        number_of_sites = side_size ** 2
-        _electron_hop_square_lookup_side = side_size
-        _electron_hop_square_lookup = np.zeros(number_of_sites, dtype=int)
-        for i in range(number_of_sites):
-            pattern = (1 << ((i - side_size) % number_of_sites)) \
-                      | (1 << ((i + side_size) % number_of_sites)) \
-                      | (1 << ((i - 1) % side_size + (i // side_size) * side_size)) \
-                      | (1 << ((i + 1) % side_size + (i // side_size) * side_size))
-            _electron_hop_square_lookup[i] = pattern
-
-
-def get_square_electron_hop_lookup():
-    """Public function to view the hop lookup array."""
-    return _electron_hop_square_lookup
-
-
 def list_possible_spinless_square_hops(vector, number_of_electrons, side_size):
     """Returns all possible vectors (in vector form) for any given hop along with its sign."""
-    _generate_square_electron_hop_lookup(side_size)
+    square_hop_lookup = LUTM.get_square_hop_lut(side_size)
     number_of_sites = side_size ** 2
     resulting_vectors = np.empty((2, 4 * number_of_electrons + 1), dtype=int)
-    resulting_vectors[0][0] = 0                                       # The 0th element holds number of found hops.
+    resulting_vectors[0][0] = 0  # The 0th element holds number of found hops.
     for source_bit in range(number_of_sites):
         if vector >> source_bit & 1:
-            hops = _electron_hop_square_lookup[source_bit] & ~ vector
+            hops = square_hop_lookup[source_bit] & ~ vector
             for hop_bit in range(number_of_sites):
                 if hops >> hop_bit & 1:
                     resulting_vectors[0][0] += 1
@@ -195,7 +231,7 @@ def list_possible_spinless_square_hops(vector, number_of_electrons, side_size):
                         resulting_vectors[1][resulting_vectors[0][0]] = 1
                     else:
                         resulting_vectors[1][resulting_vectors[0][0]] = -1
-    result_view = resulting_vectors[:, 1 : resulting_vectors[0][0] + 1]
+    result_view = resulting_vectors[:, 1: resulting_vectors[0][0] + 1]
     return result_view[:, result_view[0, :].argsort()]
 
 
@@ -280,7 +316,7 @@ def list_possible_constrained_square_hop_indices(basis, vector, number_of_positi
             negative_insert_index = -1
     if it_result.finished:
         return resulting_vectors
-    return resulting_vectors[:, 0 : it_result.index]
+    return resulting_vectors[:, 0: it_result.index]
 
 
 def constrained_square_hamiltonian(basis, number_of_electrons, number_of_positive_spins, side_size):
@@ -299,63 +335,9 @@ def constrained_square_hamiltonian(basis, number_of_electrons, number_of_positiv
     return hamiltonian.tocsr()
 
 
-def _multiply_vec_by_spinless(vec):
-    """Private function to be used by the scipy.sparse.linalg.LinearOperator class as a spinless Hamiltonian substitute.
-
-    The function works by taking each basis component, computing its resulting vector and adding that to the result.
-    It heavily utilizes list_possible_spinless_square_hops()."""
-    if vec.shape[0] != _spinless_basis.shape[0]:                            # TODO: change to automatic basis generation
-        raise ValueError("Wrong spinless basis passed to LinearOperator")   # as a fallback or move basis validity check
-    result = np.zeros(vec.shape[0], dtype=np.double)                        # elsewhere.
-    it_vec = np.nditer(vec, flags=['f_index'])
-    while not it_vec.finished:
-        if vec[it_vec.index] != 0:
-            vecs_to_add = list_possible_spinless_square_hops(_spinless_basis[it_vec.index],
-                                                             _number_of_electrons, _side_size)
-            for i in range(vecs_to_add.shape[1]):
-                result[get_spinless_vector_index(_spinless_basis, vecs_to_add[0][i])] \
-                    += vec[it_vec.index] * vecs_to_add[1][i]
-        it_vec.iternext()
-    return result
-
-
-def _multiply_vec_by_constrained(vec):                         # TODO: TEST THIS FUNCTION
-    if vec.shape[0] != _constrained_basis.shape[0]:                         # TODO: change to automatic basis generation
-        raise ValueError("Wrong spinless basis passed to LinearOperator")   # as a fallback or move basis validity check
-    result = np.zeros(vec.shape[0], dtype=np.double)
-    it_vec = np.nditer(vec, flags=['f_index'])
-    while not it_vec.finished:
-        if vec[it_vec.index] != 0:
-            vecs_to_add = list_possible_constrained_square_hop_indices(_constrained_basis,
-                                                                       _constrained_basis[it_vec.index],
-                                                                       _number_of_positive_spins,
-                                                                       _number_of_negative_spins,
-                                                                       _side_size)
-            for i in range(vecs_to_add.shape[1]):
-                result[vecs_to_add[0][i]] += vec[it_vec.index] * vecs_to_add[1][i]
-        it_vec.iternext()
-    return result
-
-
-def _multiply_vec_by_free(vec):                         # TODO: TEST THIS FUNCTION
-    if vec.shape[0] != _free_basis.shape[0]:                                # TODO: change to automatic basis generation
-        raise ValueError("Wrong spinless basis passed to LinearOperator")   # as a fallback or move basis validity check
-    result = np.zeros(vec.shape[0], dtype=np.double)
-    it_vec = np.nditer(vec, flags=['f_index'])
-    while not it_vec.finished:
-        if vec[it_vec.index] != 0:
-            vecs_to_add = list_possible_free_square_hop_indices(_free_basis, _free_basis[it_vec.index],
-                                                                _number_of_positive_spins, _number_of_negative_spins,
-                                                                _side_size)
-            for i in range(vecs_to_add.shape[1]):
-                result[vecs_to_add[0][i]] += vec[it_vec.index] * vecs_to_add[1][i]
-        it_vec.iternext()
-    return result
-
-
 def spinless_spectral_absorption(basis_abs, basis_orig, ground_state, size_size, k_list):
     # abs - absorbed, orig - original
-    result = np.zeros(basis_abs.shape[0], dtype=complex)                          # TODO: NORMALIZE INPUT GROUND VECTOR
+    result = np.zeros(basis_abs.shape[0], dtype=complex)  # TODO: NORMALIZE INPUT GROUND VECTOR
     for i in range(ground_state.shape[0]):
         pass
 

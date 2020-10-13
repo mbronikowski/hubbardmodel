@@ -25,13 +25,13 @@ hubbard.initialize_square_model(side_size, number_of_electrons, number_of_positi
 hubbard.initialize_bases()
 
 
-spinless_basis = hubbard._generate_spinless_basis(number_of_electrons, number_of_sites)
-spinless_basis_plus_1 = hubbard._generate_spinless_basis(number_of_electrons + 1, number_of_sites)
+spinless_basis = hubbard.generate_spinless_basis(number_of_electrons, number_of_sites)
+spinless_basis_plus_1 = hubbard.generate_spinless_basis(number_of_electrons + 1, number_of_sites)
 
 # free_basis = hubbard._generate_free_basis(number_of_electrons, number_of_positive_spins, number_of_sites)
 # print(free_basis)
 
-constrained_basis = hubbard._generate_constrained_basis(number_of_electrons, number_of_positive_spins, number_of_sites)
+constrained_basis = hubbard.generate_constrained_basis(number_of_electrons, number_of_positive_spins, number_of_sites)
 # free_basis = hubbard._generate_free_basis(number_of_electrons, number_of_positive_spins, number_of_sites)
 
 print(constrained_basis)
