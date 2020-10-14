@@ -1,5 +1,6 @@
 import numpy as np
 from scipy import special, sparse
+from scipy.sparse import linalg
 
 
 class LUTManager:
@@ -55,6 +56,15 @@ class SquareModel:
         self.spinless_basis = generate_spinless_basis(self.no_electrons, self.no_atoms)
         self.free_basis = generate_free_basis(self.no_electrons, self.no_plus_spins, self.no_atoms)
         self.constrained_basis = generate_constrained_basis(self.no_electrons, self.no_plus_spins, self.no_atoms)
+        self.spinless_hmltn_linop = sparse.linalg.LinearOperator((self.spinless_basis.shape[0],
+                                                                  self.spinless_basis.shape[0]),
+                                                                 matvec=self.spinless_multiply_vec_no_hmltn)
+        self.free_hmltn_linop = sparse.linalg.LinearOperator((self.free_basis.shape[0],
+                                                              self.free_basis.shape[0]),
+                                                             matvec=self.free_multiply_vec_no_hmltn)
+        self.constrained_hmltn_linop = sparse.linalg.LinearOperator((self.constrained_basis.shape[0],
+                                                                     self.constrained_basis.shape[0]),
+                                                                    matvec=self.constrained_multiply_vec_no_hmltn)
         self.spinless_hamiltonian_exists = False
         self.free_hamiltonian_exists = False
         self.constrained_hamiltonian_exists = False
@@ -103,6 +113,21 @@ class SquareModel:
                     result[vecs_to_add[0][i]] += vec[it_vec.index] * vecs_to_add[1][i]
             it_vec.iternext()
         return result
+
+    def get_ground_spinless_state(self):
+        if self.spinless_hamiltonian_exists:
+            return sparse.linalg.eigsh(self.spinless_hamiltonian, k=1, which='SA')
+        return sparse.linalg.eigsh(self.spinless_hmltn_linop, k=1, which='SA')
+
+    def get_ground_free_state(self):
+        if self.spinless_hamiltonian_exists:
+            return sparse.linalg.eigsh(self.free_hamiltonian, k=1, which='SA')
+        return sparse.linalg.eigsh(self.free_hmltn_linop, k=1, which='SA')
+
+    def get_ground_constrained_state(self):
+        if self.spinless_hamiltonian_exists:
+            return sparse.linalg.eigsh(self.constrained_hamiltonian, k=1, which='SA')
+        return sparse.linalg.eigsh(self.constrained_hmltn_linop, k=1, which='SA')
 
     def _generate_spinless_hamiltonian(self):
         self.spinless_hamiltonian = spinless_square_hamiltonian(self.spinless_basis, self.no_electrons, self.side)
@@ -335,7 +360,7 @@ def constrained_square_hamiltonian(basis, number_of_electrons, number_of_positiv
     return hamiltonian.tocsr()
 
 
-def spinless_spectral_absorption(basis_abs, basis_orig, ground_state, size_size, k_list):
+def spinless_spectral_absorption(basis_abs, basis_orig, ground_state, side, k_list):
     # abs - absorbed, orig - original
     result = np.zeros(basis_abs.shape[0], dtype=complex)  # TODO: NORMALIZE INPUT GROUND VECTOR
     for i in range(ground_state.shape[0]):

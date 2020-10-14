@@ -14,27 +14,24 @@ import numpy as np
 # For hamiltonian: https://docs.scipy.org/doc/scipy/reference/sparse.html
 
 
-side_size = 3
-number_of_electrons = 3
-number_of_positive_spins = 2
-number_of_negative_spins = number_of_electrons - number_of_positive_spins
 
-number_of_sites = side_size ** 2
-
-hubbard.initialize_square_model(side_size, number_of_electrons, number_of_positive_spins)
-hubbard.initialize_bases()
-
-
-spinless_basis = hubbard.generate_spinless_basis(number_of_electrons, number_of_sites)
-spinless_basis_plus_1 = hubbard.generate_spinless_basis(number_of_electrons + 1, number_of_sites)
+# side_size = 3
+# number_of_electrons = 3
+# number_of_positive_spins = 2
+# number_of_negative_spins = number_of_electrons - number_of_positive_spins
+#
+# number_of_sites = side_size ** 2
+#
+# spinless_basis = hubbard.generate_spinless_basis(number_of_electrons, number_of_sites)
+# spinless_basis_plus_1 = hubbard.generate_spinless_basis(number_of_electrons + 1, number_of_sites)
 
 # free_basis = hubbard._generate_free_basis(number_of_electrons, number_of_positive_spins, number_of_sites)
 # print(free_basis)
 
-constrained_basis = hubbard.generate_constrained_basis(number_of_electrons, number_of_positive_spins, number_of_sites)
+# constrained_basis = hubbard.generate_constrained_basis(number_of_electrons, number_of_positive_spins, number_of_sites)
 # free_basis = hubbard._generate_free_basis(number_of_electrons, number_of_positive_spins, number_of_sites)
 
-print(constrained_basis)
+# print(constrained_basis)
 
 # print(free_basis)
 
@@ -48,7 +45,6 @@ print(constrained_basis)
 
 # hamiltonian = hubbard.spinless_square_hamiltonian(spinless_basis, number_of_electrons, side_size)
 # print(hamiltonian.todense())
-
 
 
 # print(spinless_basis.shape)
@@ -71,5 +67,5 @@ print(constrained_basis)
 
 # print(hubbard._generate_free_basis(number_of_electrons, number_of_positive_spins, number_of_sites).shape)
 
-print(spinless_basis)
-print(spinless_basis_plus_1)
+# print(spinless_basis)
+# print(spinless_basis_plus_1)
