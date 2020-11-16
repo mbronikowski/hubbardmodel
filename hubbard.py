@@ -1,3 +1,4 @@
+import cmath
 import numpy as np
 from scipy import special, sparse
 from scipy.sparse import linalg
@@ -253,9 +254,9 @@ def list_possible_spinless_square_hops(vector, number_of_electrons, side_size):
                     resulting_vectors[0][0] += 1
                     resulting_vectors[0][resulting_vectors[0][0]] = (vector | (1 << hop_bit)) & ~ (2 ** source_bit)
                     if (source_bit - hop_bit) % 2:
-                        resulting_vectors[1][resulting_vectors[0][0]] = 1
-                    else:
                         resulting_vectors[1][resulting_vectors[0][0]] = -1
+                    else:
+                        resulting_vectors[1][resulting_vectors[0][0]] = 1
     result_view = resulting_vectors[:, 1: resulting_vectors[0][0] + 1]
     return result_view[:, result_view[0, :].argsort()]
 
@@ -360,12 +361,113 @@ def constrained_square_hamiltonian(basis, number_of_electrons, number_of_positiv
     return hamiltonian.tocsr()
 
 
-def spinless_spectral_absorption(basis_abs, basis_orig, ground_state, side, k_list):
+def cr_an_operator_ampl(sign, side_size, atom_index, k_list):
+    """Computes the amplitude of the creation/annihilation operator in real space when
+     the operator is originally in the reciprocal space.
+
+     Sign should be 1 for creation, -1 for annihilation. Used in computing a_k^dag into a_(atom index)^dag.
+     """
+    return cmath.exp(sign * 2j * cmath.pi / side_size * (k_list[0] * (atom_index % side_size)
+                                                         + k_list[1] * (atom_index // side_size)))
+
+
+def spinless_spectral_absorption(basis_abs, basis_orig, ground_state, side_size, k_list):
     # abs - absorbed, orig - original
-    result = np.zeros(basis_abs.shape[0], dtype=complex)  # TODO: NORMALIZE INPUT GROUND VECTOR
-    for i in range(ground_state.shape[0]):
-        pass
+    number_of_atoms = side_size ** 2
+    result_vector = np.zeros(basis_abs.shape[0], dtype=complex)
+    for orig_index in range(ground_state.shape[0]):
+        orig_vector = basis_orig[orig_index]
+        for atom_index in range(number_of_atoms):
+            if not orig_vector & (1 << atom_index):    # "If the atom is free to absorb an electron"
+                abs_vector_index = get_spinless_vector_index(basis_abs, orig_vector + (1 << atom_index))
+                result_vector[abs_vector_index] += ground_state[orig_index] \
+                                                 * cr_an_operator_ampl(1, side_size, atom_index, k_list)
+    result = 0
+    for result_index in range(result_vector.shape[0]):
+        result += abs(result_vector[result_index]) ** 2
+    return result
 
 
-def spinless_spectral_emission():
-    pass
+def free_spectral_absorption(basis_abs, basis_orig, ground_state, side_size, k_list):
+    # abs - absorbed, orig - original
+    number_of_atoms = side_size ** 2
+    result_vector = np.zeros((basis_abs.shape[0], 2), dtype=complex)
+    for orig_index in range(ground_state.shape[0]):
+        orig_vector = basis_orig[orig_index]
+        for atom_index in range(number_of_atoms):
+            can_absorb_plus = ~ orig_vector[0] & (1 << atom_index)
+            can_absorb_minus = ~ orig_vector[1] & (1 << atom_index)
+            if can_absorb_plus:
+                new_vector_index = get_spin_vector_index(basis_abs, (orig_vector[0] + can_absorb_plus, orig_vector[1]))
+                result_vector[new_vector_index][0] += ground_state[orig_index] \
+                                                    * cr_an_operator_ampl(1, side_size, atom_index, k_list)
+            if can_absorb_minus:
+                new_vector_index = get_spin_vector_index(basis_abs, (orig_vector[0], orig_vector[1] + can_absorb_minus))
+                result_vector[new_vector_index][1] += ground_state[orig_index] \
+                                                    * cr_an_operator_ampl(1, side_size, atom_index, k_list)
+    result = 0
+    for result_index in range(result_vector.shape[0]):
+        result += abs(result_vector[result_index][0]) ** 2 + abs(result_vector[result_index][1]) ** 2
+    return result
+
+
+def constrained_spectral_absorption(basis_abs, basis_orig, ground_state, side_size, k_list):
+    # abs - absorbed, orig - original
+    number_of_atoms = side_size ** 2
+    result_vector = np.zeros((basis_abs.shape[0], 2), dtype=complex)
+    for orig_index in range(ground_state.shape[0]):
+        orig_vector = basis_orig[orig_index]
+        for atom_index in range(number_of_atoms):
+            can_absorb = ~ (orig_vector[0] | orig_vector[1]) & (1 << atom_index)
+            if can_absorb:
+                new_vector_index = get_spin_vector_index(basis_abs, (orig_vector[0] + can_absorb, orig_vector[1]))
+                result_vector[new_vector_index][0] += ground_state[orig_index] \
+                                                    * cr_an_operator_ampl(1, side_size, atom_index, k_list)
+                new_vector_index = get_spin_vector_index(basis_abs, (orig_vector[0], orig_vector[1] + can_absorb))
+                result_vector[new_vector_index][1] += ground_state[orig_index] \
+                                                    * cr_an_operator_ampl(1, side_size, atom_index, k_list)
+    result = 0
+    for result_index in range(result_vector.shape[0]):
+        result += abs(result_vector[result_index][0]) ** 2 + abs(result_vector[result_index][1]) ** 2
+    return result
+
+
+def spinless_spectral_emission(basis_em, basis_orig, ground_state, side_size, k_list):
+    # em - post-emission, orig - original
+    number_of_atoms = side_size ** 2
+    result_vector = np.zeros(basis_em.shape[0], dtype=complex)
+    for orig_index in range(ground_state.shape[0]):
+        orig_vector = basis_orig[orig_index]
+        for atom_index in range(number_of_atoms):
+            if orig_vector & (1 << atom_index):    # "If the atom is free to absorb an electron"
+                em_vector_index = get_spinless_vector_index(basis_em, orig_vector - (1 << atom_index))
+                result_vector[em_vector_index] += ground_state[orig_index] \
+                                                * cr_an_operator_ampl(-1, side_size, atom_index, k_list)
+    result = 0
+    for result_index in range(result_vector.shape[0]):
+        result += abs(result_vector[result_index]) ** 2
+    return result
+
+
+def spin_spectral_emission(basis_em, basis_orig, ground_state, side_size, k_list):
+    # em - post-emission, orig - original
+    number_of_atoms = side_size ** 2
+    result_vector = np.zeros((basis_em.shape[0], 2), dtype=complex)
+    for orig_index in range(ground_state.shape[0]):
+        orig_vector = basis_orig[orig_index]
+        for atom_index in range(number_of_atoms):
+            can_emit_plus = orig_vector[0] & (1 << atom_index)
+            can_emit_minus = orig_vector[1] & (1 << atom_index)
+            if can_emit_plus:
+                new_vector_index = get_spin_vector_index(basis_em, (orig_vector[0] - can_emit_plus, orig_vector[1]))
+                result_vector[new_vector_index][0] += ground_state[orig_index] \
+                                                    * cr_an_operator_ampl(-1, side_size, atom_index, k_list)
+            if can_emit_minus:
+                new_vector_index = get_spin_vector_index(basis_em, (orig_vector[0], orig_vector[1] - can_emit_minus))
+                result_vector[new_vector_index][1] += ground_state[orig_index] \
+                                                    * cr_an_operator_ampl(-1, side_size, atom_index, k_list)
+    result = 0
+    for result_index in range(result_vector.shape[0]):
+        result += abs(result_vector[result_index][0]) ** 2 + abs(result_vector[result_index][1]) ** 2
+    return result
+

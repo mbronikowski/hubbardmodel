@@ -69,3 +69,18 @@ import numpy as np
 
 # print(spinless_basis)
 # print(spinless_basis_plus_1)
+model = hubbard.SquareModel(9, 4, 3)
+print(model.free_basis.shape)
+model._generate_free_hamiltonian()
+print("generated hamiltonian")
+eigensys = linalg.eigsh(model.free_hamiltonian, k=model.free_basis.shape[0] - 1)
+
+print(eigensys[0])
+# model_orig._generate_spinless_hamiltonian()
+# ground_state = model_orig.get_ground_spinless_state()
+# model_abs = hubbard.SquareModel(6, 2, 3)
+# print(ground_state[1])
+# print(np.linalg.norm(ground_state[1]))
+# for k in [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1), (0, 2), (1, 2), (2, 2)]:
+#     abs_spec = hubbard.spinless_spectral_absorption(model_abs.spinless_basis, model_orig.spinless_basis, ground_state[1], 3, k)
+#     print(k, abs_spec)
