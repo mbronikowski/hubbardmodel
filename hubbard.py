@@ -4,7 +4,7 @@ from scipy import special, sparse
 from scipy.sparse import linalg
 
 
-class LUTManager:
+class _LUTManager:
     """LUTManager is the class for LUTM, this project's lookup table manager.
 
     Any LUT access in the module is managed by this class. It holds the dictionaries for arrays which assign
@@ -44,7 +44,7 @@ class LUTManager:
         self._square_hop_dict[side_size] = new_square_hop_lut
 
 
-LUTM = LUTManager()
+_LUTM = _LUTManager()
 
 
 class SquareModel:
@@ -151,7 +151,7 @@ def generate_spinless_basis(number_of_electrons, number_of_sites):
     The function uses the lookup table _electron_number_array. In case the array has not yet been generated,
     the function will call _assign_number_to_electron_number to generate it first.
     """
-    electron_number_array = LUTM.get_electron_number_lut(number_of_sites)
+    electron_number_array = _LUTM.get_electron_number_lut(number_of_sites)
     it_number_array = np.nditer(electron_number_array, flags=['f_index'])
     result_len = special.comb(number_of_sites, number_of_electrons, exact=True)
     result = np.empty(result_len, dtype=int)
@@ -242,7 +242,7 @@ def get_spin_vector_index(basis, vector):
 
 def list_possible_spinless_square_hops(vector, number_of_electrons, side_size):
     """Returns all possible vectors (in vector form) for any given hop along with its sign."""
-    square_hop_lookup = LUTM.get_square_hop_lut(side_size)
+    square_hop_lookup = _LUTM.get_square_hop_lut(side_size)
     number_of_sites = side_size ** 2
     resulting_vectors = np.empty((2, 4 * number_of_electrons + 1), dtype=int)
     resulting_vectors[0][0] = 0  # The 0th element holds number of found hops.
