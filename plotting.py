@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib as mpl
 
 
 def print_square_spinless_vector(vector, side_size):
@@ -29,5 +28,4 @@ def print_square_spin_vector(vector, side_size):
             else:
                 print('0', end=end_char)
         print(']')
-
 
