@@ -4,6 +4,9 @@ from scipy import special, sparse
 from scipy.sparse import linalg
 
 
+_numeric_threshold = 1e-4
+
+
 class _LUTManager:
     """LUTManager is the class for LUTM, this project's lookup table manager.
 
@@ -59,13 +62,13 @@ class SquareModel:
         self.constrained_basis = generate_constrained_basis(self.no_electrons, self.no_plus_spins, self.no_atoms)
         self.spinless_hmltn_linop = sparse.linalg.LinearOperator((self.spinless_basis.shape[0],
                                                                   self.spinless_basis.shape[0]),
-                                                                 matvec=self.spinless_multiply_vec_no_hmltn)
+                                                                 matvec=self._spinless_multiply_vec_no_hmltn)
         self.free_hmltn_linop = sparse.linalg.LinearOperator((self.free_basis.shape[0],
                                                               self.free_basis.shape[0]),
-                                                             matvec=self.free_multiply_vec_no_hmltn)
+                                                             matvec=self._free_multiply_vec_no_hmltn)
         self.constrained_hmltn_linop = sparse.linalg.LinearOperator((self.constrained_basis.shape[0],
                                                                      self.constrained_basis.shape[0]),
-                                                                    matvec=self.constrained_multiply_vec_no_hmltn)
+                                                                    matvec=self._constrained_multiply_vec_no_hmltn)
         self.spinless_hamiltonian_exists = False
         self.free_hamiltonian_exists = False
         self.constrained_hamiltonian_exists = False
@@ -73,9 +76,9 @@ class SquareModel:
         self.free_hamiltonian = None
         self.constrained_hamiltonian = None
 
-    def spinless_multiply_vec_no_hmltn(self, vec):
+    def _spinless_multiply_vec_no_hmltn(self, vec):
         """Multiplies a vector by the model's spinless Hamiltonian without its explicit representation."""
-        result = np.zeros(vec.shape[0], dtype=np.double)
+        result = np.zeros(vec.shape[0], dtype=vec.dtype)
         it_vec = np.nditer(vec, flags=['f_index'])
         while not it_vec.finished:
             if vec[it_vec.index] != 0:
@@ -87,9 +90,9 @@ class SquareModel:
             it_vec.iternext()
         return result
 
-    def free_multiply_vec_no_hmltn(self, vec):  # TODO: TEST THIS FUNCTION
+    def _free_multiply_vec_no_hmltn(self, vec):  # TODO: TEST THIS FUNCTION
         """Multiplies a vector by the model's free Hamiltonian without its explicit representation."""
-        result = np.zeros(vec.shape[0], dtype=np.double)
+        result = np.zeros(vec.shape[0], dtype=vec.dtype)
         it_vec = np.nditer(vec, flags=['f_index'])
         while not it_vec.finished:
             if vec[it_vec.index] != 0:
@@ -100,9 +103,9 @@ class SquareModel:
             it_vec.iternext()
         return result
 
-    def constrained_multiply_vec_no_hmltn(self, vec):  # TODO: TEST THIS FUNCTION
+    def _constrained_multiply_vec_no_hmltn(self, vec):  # TODO: TEST THIS FUNCTION
         """Multiplies a vector by the model's constrained Hamiltonian without its explicit representation."""
-        result = np.zeros(vec.shape[0], dtype=np.double)
+        result = np.zeros(vec.shape[0], dtype=vec.dtype)
         it_vec = np.nditer(vec, flags=['f_index'])
         while not it_vec.finished:
             if vec[it_vec.index] != 0:
@@ -114,6 +117,21 @@ class SquareModel:
                     result[vecs_to_add[0][i]] += vec[it_vec.index] * vecs_to_add[1][i]
             it_vec.iternext()
         return result
+
+    def multiply_vec_spinless_hmltn(self, vec):
+        if self.spinless_hamiltonian_exists:
+            return self.spinless_hamiltonian.multiply(vec)
+        return self.spinless_hmltn_linop.matvec(vec)
+
+    def multiply_vec_free_hmltn(self, vec):
+        if self.free_hamiltonian_exists:
+            return self.free_hamiltonian.multiply(vec)
+        return self.free_hmltn_linop.matvec(vec)
+
+    def multiply_vec_constrained_hmltn(self, vec):
+        if self.constrained_hamiltonian_exists:
+            return self.constrained_hamiltonian.multiply(vec)
+        return self.constrained_hmltn_linop.matvec(vec)
 
     def get_ground_spinless_state(self):
         if self.spinless_hamiltonian_exists:
@@ -143,6 +161,14 @@ class SquareModel:
         self.constrained_hamiltonian = constrained_square_hamiltonian(self.constrained_basis, self.no_electrons,
                                                                       self.no_plus_spins, self.side)
         self.constrained_hamiltonian_exists = True
+
+
+def _normalize(vec):
+    """Returns a tuple with the norm of a vector and the normalized vector."""
+    norm = np.linalg.norm(vec)
+    if norm == 0:
+        return vec
+    return norm, vec/norm
 
 
 def generate_spinless_basis(number_of_electrons, number_of_sites):
@@ -371,7 +397,8 @@ def cr_an_operator_ampl(sign, side_size, atom_index, k_list):
                                                          + k_list[1] * (atom_index // side_size)))
 
 
-def spinless_spectral_absorption(basis_abs, basis_orig, ground_state, side_size, k_list):
+def spinless_abs_ref_state(basis_abs, basis_orig, ground_state, side_size, k_list):
+    """Generates the 0th reference state for spinless absorption, i. e. a_k^dag * ground state."""
     # abs - absorbed, orig - original
     number_of_atoms = side_size ** 2
     result_vector = np.zeros(basis_abs.shape[0], dtype=complex)
@@ -382,10 +409,60 @@ def spinless_spectral_absorption(basis_abs, basis_orig, ground_state, side_size,
                 abs_vector_index = get_spinless_vector_index(basis_abs, orig_vector + (1 << atom_index))
                 result_vector[abs_vector_index] += ground_state[orig_index] \
                                                  * cr_an_operator_ampl(1, side_size, atom_index, k_list)
-    result = 0
-    for result_index in range(result_vector.shape[0]):
-        result += abs(result_vector[result_index]) ** 2
-    return result
+    return _normalize(result_vector)
+
+
+def spectral_lanczos(model, spin_type, abs_em_type, ref_vec_with_norm, ground_state_energy, omega):
+    if spin_type == 's':
+        def vec_by_hmltn(vec):
+            return model.multiply_vec_spinless_hmltn(vec)
+
+    elif spin_type == 'f':
+        def vec_by_hmltn(vec):
+            return model.multiply_vec_free_hmltn(vec)
+
+    elif spin_type == 'c':
+        def vec_by_hmltn(vec):
+            return model.multiply_vec_constrained_hmltn(vec)
+    else:
+        raise ValueError("spin_type must be 's', 'f' or 'c' for spinless, free or constrained models, respectively.")
+
+    if abs_em_type == 'a':
+        sign = -1
+    elif abs_em_type == 'e':
+        sign = 1
+    else:
+        raise ValueError("abs_em_type must be 'a' for absorption or 'e' for emission.")
+
+    norm_current, ref_vec_current = ref_vec_with_norm
+    ref_vec_prev = np.zeros(ref_vec_current.shape, dtype=ref_vec_current.dtype)
+    norm_energy_array = np.empty((ref_vec_current.shape[0], 2))     # Holds k_i^2 and Delta eps_i
+
+    last_i = ref_vec_current.shape[0] - 1
+    for i in range(ref_vec_current.shape[0]):
+        norm_energy_array[i][0] = norm_current ** 2
+        ref_vec_multiplied_by_hmltn = vec_by_hmltn(ref_vec_current)
+        energy_diff = (np.vdot(ref_vec_current, ref_vec_multiplied_by_hmltn) - ground_state_energy).real
+        # Casting to real only deletes numerical residue.
+        ref_vec_new = ref_vec_multiplied_by_hmltn \
+                    - (ground_state_energy + energy_diff) * ref_vec_current \
+                    - norm_current * ref_vec_prev
+        ref_vec_prev = ref_vec_current
+        norm_current, ref_vec_current = _normalize(ref_vec_new)
+
+        norm_energy_array[i][1] = energy_diff
+
+        if norm_current < _numeric_threshold:
+            last_i = i
+            break
+
+    result_fraction = 0
+    for i in range(last_i, -1, -1):     # Iterates from last i to zero, inclusive.
+        result_fraction = norm_energy_array[i][0] / (omega + sign * norm_energy_array[i][1] - result_fraction)
+    return result_fraction
+
+
+# EVERYTHING BELOW IS BROKEN, TO BE FIXED
 
 
 def free_spectral_absorption(basis_abs, basis_orig, ground_state, side_size, k_list):
