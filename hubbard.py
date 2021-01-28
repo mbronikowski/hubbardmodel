@@ -4,7 +4,7 @@ from scipy import special, sparse
 from scipy.sparse import linalg
 
 
-_numeric_threshold = 1e-4
+_numeric_threshold = 1e-8
 
 
 class _LUTManager:
@@ -167,7 +167,7 @@ def _normalize(vec):
     """Returns a tuple with the norm of a vector and the normalized vector."""
     norm = np.linalg.norm(vec)
     if norm == 0:
-        return vec
+        return norm, vec
     return norm, vec/norm
 
 
@@ -271,7 +271,7 @@ def list_possible_spinless_square_hops(vector, number_of_electrons, side_size):
     square_hop_lookup = _LUTM.get_square_hop_lut(side_size)
     number_of_sites = side_size ** 2
     resulting_vectors = np.empty((2, 4 * number_of_electrons + 1), dtype=int)
-    resulting_vectors[0][0] = 0  # The 0th element holds number of found hops.
+    resulting_vectors[0][0] = 0  # The 0th element holds the number of found hops.
     for source_bit in range(number_of_sites):
         if vector >> source_bit & 1:
             hops = square_hop_lookup[source_bit] & ~ vector
@@ -412,15 +412,14 @@ def spinless_abs_ref_state(basis_abs, basis_orig, ground_state, side_size, k_lis
     return _normalize(result_vector)
 
 
-def spectral_lanczos(model, spin_type, abs_em_type, ref_vec_with_norm, ground_state_energy, omega):
+def spectral_green_lanczos(model, spin_type, abs_em_type, ref_vec_with_norm, ground_state_energy, omega):
+    """Calculates the Green function using the Lanczos method."""
     if spin_type == 's':
         def vec_by_hmltn(vec):
             return model.multiply_vec_spinless_hmltn(vec)
-
     elif spin_type == 'f':
         def vec_by_hmltn(vec):
             return model.multiply_vec_free_hmltn(vec)
-
     elif spin_type == 'c':
         def vec_by_hmltn(vec):
             return model.multiply_vec_constrained_hmltn(vec)
