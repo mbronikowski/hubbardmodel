@@ -50,67 +50,117 @@ class _LUTManager:
 _LUTM = _LUTManager()
 
 
-class SquareModel:
+class SquareSpinlessModel:
     def __init__(self, number_of_electrons, number_of_positive_spins, side_size):
         self.no_electrons = number_of_electrons
         self.no_plus_spins = number_of_positive_spins
         self.no_minus_spins = number_of_electrons - number_of_positive_spins
         self.side = side_size
         self.no_atoms = side_size ** 2
-        self.spinless_basis = generate_spinless_basis(self.no_electrons, self.no_atoms)
-        self.free_basis = generate_free_basis(self.no_electrons, self.no_plus_spins, self.no_atoms)
-        self.constrained_basis = generate_constrained_basis(self.no_electrons, self.no_plus_spins, self.no_atoms)
-        self.spinless_hmltn_linop = sparse.linalg.LinearOperator((self.spinless_basis.shape[0],
-                                                                  self.spinless_basis.shape[0]),
-                                                                 matvec=self._spinless_multiply_vec_no_hmltn)
-        self.free_hmltn_linop = sparse.linalg.LinearOperator((self.free_basis.shape[0],
-                                                              self.free_basis.shape[0]),
-                                                             matvec=self._free_multiply_vec_no_hmltn)
-        self.constrained_hmltn_linop = sparse.linalg.LinearOperator((self.constrained_basis.shape[0],
-                                                                     self.constrained_basis.shape[0]),
-                                                                    matvec=self._constrained_multiply_vec_no_hmltn)
-        self.spinless_hamiltonian_exists = False
-        self.free_hamiltonian_exists = False
-        self.constrained_hamiltonian_exists = False
-        self.spinless_hamiltonian = None
-        self.free_hamiltonian = None
-        self.constrained_hamiltonian = None
+        self.basis = generate_spinless_basis(self.no_electrons, self.no_atoms)
+        self.hmltn_linop = sparse.linalg.LinearOperator((self.basis.shape[0],
+                                                         self.basis.shape[0]),
+                                                        matvec=self._multiply_vec_no_hmltn)
+        self.hamiltonian_exists = False
+        self.hamiltonian = None
+        self.spin_type = "spinless"
 
-    def _spinless_multiply_vec_no_hmltn(self, vec):
+    def _multiply_vec_no_hmltn(self, vec):
         """Multiplies a vector by the model's spinless Hamiltonian without its explicit representation."""
         result = np.zeros(vec.shape[0], dtype=vec.dtype)
         it_vec = np.nditer(vec, flags=['f_index'])
         while not it_vec.finished:
             if vec[it_vec.index] != 0:
-                vecs_to_add = list_possible_spinless_square_hops(self.spinless_basis[it_vec.index],
+                vecs_to_add = list_possible_spinless_square_hops(self.basis[it_vec.index],
                                                                  self.no_electrons, self.side)
                 for i in range(vecs_to_add.shape[1]):
-                    result[get_spinless_vector_index(self.spinless_basis, vecs_to_add[0][i])] \
+                    result[get_spinless_vector_index(self.basis, vecs_to_add[0][i])] \
                         += vec[it_vec.index] * vecs_to_add[1][i]
             it_vec.iternext()
         return result
 
-    def _free_multiply_vec_no_hmltn(self, vec):  # TODO: TEST THIS FUNCTION
+    def multiply_vec_hmltn(self, vec):
+        if self.hamiltonian_exists:
+            return self.hamiltonian.multiply(vec)
+        return self.hmltn_linop.matvec(vec)
+
+    def get_ground_state(self):
+        if self.hamiltonian_exists:
+            return sparse.linalg.eigsh(self.hamiltonian, k=1, which='SA')
+        return sparse.linalg.eigsh(self.hmltn_linop, k=1, which='SA')
+
+    def _generate_hamiltonian(self):
+        self.hamiltonian = spinless_square_hamiltonian(self.basis, self.no_electrons, self.side)
+        self.hamiltonian_exists = True
+
+
+class SquareFreeModel:
+    def __init__(self, number_of_electrons, number_of_positive_spins, side_size):
+        self.no_electrons = number_of_electrons
+        self.no_plus_spins = number_of_positive_spins
+        self.no_minus_spins = number_of_electrons - number_of_positive_spins
+        self.side = side_size
+        self.no_atoms = side_size ** 2
+        self.basis = generate_free_basis(self.no_electrons, self.no_plus_spins, self.no_atoms)
+        self.hmltn_linop = sparse.linalg.LinearOperator((self.basis.shape[0],
+                                                         self.basis.shape[0]),
+                                                        matvec=self._multiply_vec_no_hmltn)
+        self.hamiltonian_exists = False
+        self.hamiltonian = None
+        self.spin_type = "free"
+
+    def _multiply_vec_no_hmltn(self, vec):  # TODO: TEST THIS FUNCTION
         """Multiplies a vector by the model's free Hamiltonian without its explicit representation."""
         result = np.zeros(vec.shape[0], dtype=vec.dtype)
         it_vec = np.nditer(vec, flags=['f_index'])
         while not it_vec.finished:
             if vec[it_vec.index] != 0:
-                vecs_to_add = list_possible_free_square_hop_indices(self.free_basis, self.free_basis[it_vec.index],
+                vecs_to_add = list_possible_free_square_hop_indices(self.basis, self.basis[it_vec.index],
                                                                     self.no_plus_spins, self.no_minus_spins, self.side)
                 for i in range(vecs_to_add.shape[1]):
                     result[vecs_to_add[0][i]] += vec[it_vec.index] * vecs_to_add[1][i]
             it_vec.iternext()
         return result
 
-    def _constrained_multiply_vec_no_hmltn(self, vec):  # TODO: TEST THIS FUNCTION
+    def multiply_vec_hmltn(self, vec):
+        if self.hamiltonian_exists:
+            return self.hamiltonian.multiply(vec)
+        return self.hmltn_linop.matvec(vec)
+
+    def get_ground_state(self):
+        if self.hamiltonian_exists:
+            return sparse.linalg.eigsh(self.hamiltonian, k=1, which='SA')
+        return sparse.linalg.eigsh(self.hmltn_linop, k=1, which='SA')
+
+    def _generate_hamiltonian(self):
+        self.hamiltonian = free_square_hamiltonian(self.basis, self.no_electrons,
+                                                   self.no_plus_spins, self.side)
+        self.hamiltonian_exists = True
+
+
+class SquareConstrainedModel:
+    def __init__(self, number_of_electrons, number_of_positive_spins, side_size):
+        self.no_electrons = number_of_electrons
+        self.no_plus_spins = number_of_positive_spins
+        self.no_minus_spins = number_of_electrons - number_of_positive_spins
+        self.side = side_size
+        self.no_atoms = side_size ** 2
+        self.basis = generate_constrained_basis(self.no_electrons, self.no_plus_spins, self.no_atoms)
+        self.hmltn_linop = sparse.linalg.LinearOperator((self.basis.shape[0],
+                                                         self.basis.shape[0]),
+                                                        matvec=self._multiply_vec_no_hmltn)
+        self.hamiltonian_exists = False
+        self.hamiltonian = None
+        self.spin_type = "constrained"
+
+    def _multiply_vec_no_hmltn(self, vec):  # TODO: TEST THIS FUNCTION
         """Multiplies a vector by the model's constrained Hamiltonian without its explicit representation."""
         result = np.zeros(vec.shape[0], dtype=vec.dtype)
         it_vec = np.nditer(vec, flags=['f_index'])
         while not it_vec.finished:
             if vec[it_vec.index] != 0:
-                vecs_to_add = list_possible_constrained_square_hop_indices(self.constrained_basis,
-                                                                           self.constrained_basis[it_vec.index],
+                vecs_to_add = list_possible_constrained_square_hop_indices(self.basis,
+                                                                           self.basis[it_vec.index],
                                                                            self.no_plus_spins, self.no_minus_spins,
                                                                            self.side)
                 for i in range(vecs_to_add.shape[1]):
@@ -118,49 +168,20 @@ class SquareModel:
             it_vec.iternext()
         return result
 
-    def multiply_vec_spinless_hmltn(self, vec):
-        if self.spinless_hamiltonian_exists:
-            return self.spinless_hamiltonian.multiply(vec)
-        return self.spinless_hmltn_linop.matvec(vec)
+    def multiply_vec_hmltn(self, vec):
+        if self.hamiltonian_exists:
+            return self.hamiltonian.multiply(vec)
+        return self.hmltn_linop.matvec(vec)
 
-    def multiply_vec_free_hmltn(self, vec):
-        if self.free_hamiltonian_exists:
-            return self.free_hamiltonian.multiply(vec)
-        return self.free_hmltn_linop.matvec(vec)
+    def get_ground_state(self):
+        if self.hamiltonian_exists:
+            return sparse.linalg.eigsh(self.hamiltonian, k=1, which='SA')
+        return sparse.linalg.eigsh(self.hmltn_linop, k=1, which='SA')
 
-    def multiply_vec_constrained_hmltn(self, vec):
-        if self.constrained_hamiltonian_exists:
-            return self.constrained_hamiltonian.multiply(vec)
-        return self.constrained_hmltn_linop.matvec(vec)
-
-    def get_ground_spinless_state(self):
-        if self.spinless_hamiltonian_exists:
-            return sparse.linalg.eigsh(self.spinless_hamiltonian, k=1, which='SA')
-        return sparse.linalg.eigsh(self.spinless_hmltn_linop, k=1, which='SA')
-
-    def get_ground_free_state(self):
-        if self.spinless_hamiltonian_exists:
-            return sparse.linalg.eigsh(self.free_hamiltonian, k=1, which='SA')
-        return sparse.linalg.eigsh(self.free_hmltn_linop, k=1, which='SA')
-
-    def get_ground_constrained_state(self):
-        if self.spinless_hamiltonian_exists:
-            return sparse.linalg.eigsh(self.constrained_hamiltonian, k=1, which='SA')
-        return sparse.linalg.eigsh(self.constrained_hmltn_linop, k=1, which='SA')
-
-    def _generate_spinless_hamiltonian(self):
-        self.spinless_hamiltonian = spinless_square_hamiltonian(self.spinless_basis, self.no_electrons, self.side)
-        self.spinless_hamiltonian_exists = True
-
-    def _generate_free_hamiltonian(self):
-        self.free_hamiltonian = free_square_hamiltonian(self.free_basis, self.no_electrons,
-                                                        self.no_plus_spins, self.side)
-        self.free_hamiltonian_exists = True
-
-    def _generate_constrained_hamiltonian(self):
-        self.constrained_hamiltonian = constrained_square_hamiltonian(self.constrained_basis, self.no_electrons,
-                                                                      self.no_plus_spins, self.side)
-        self.constrained_hamiltonian_exists = True
+    def _generate_hamiltonian(self):
+        self.hamiltonian = constrained_square_hamiltonian(self.basis, self.no_electrons,
+                                                          self.no_plus_spins, self.side)
+        self.hamiltonian_exists = True
 
 
 def _normalize(vec):
@@ -397,35 +418,23 @@ def cr_an_operator_ampl(sign, side_size, atom_index, k_list):
                                                          + k_list[1] * (atom_index // side_size)))
 
 
-def spinless_abs_ref_state(basis_abs, basis_orig, ground_state, side_size, k_list):
+def spinless_abs_ref_state(model_abs, model_orig, k_list):
     """Generates the 0th reference state for spinless absorption, i. e. a_k^dag * ground state."""
     # abs - absorbed, orig - original
-    number_of_atoms = side_size ** 2
-    result_vector = np.zeros(basis_abs.shape[0], dtype=complex)
+    ground_state = model_orig.get_ground_state()[1]
+    result_vector = np.zeros(model_abs.basis.shape[0], dtype=complex)
     for orig_index in range(ground_state.shape[0]):
-        orig_vector = basis_orig[orig_index]
-        for atom_index in range(number_of_atoms):
+        orig_vector = model_orig.basis[orig_index]
+        for atom_index in range(model_abs.no_atoms):
             if not orig_vector & (1 << atom_index):    # "If the atom is free to absorb an electron"
-                abs_vector_index = get_spinless_vector_index(basis_abs, orig_vector + (1 << atom_index))
+                abs_vector_index = get_spinless_vector_index(model_abs.basis, orig_vector + (1 << atom_index))
                 result_vector[abs_vector_index] += ground_state[orig_index] \
-                                                 * cr_an_operator_ampl(1, side_size, atom_index, k_list)
+                                                 * cr_an_operator_ampl(1, model_abs.side, atom_index, k_list)
     return _normalize(result_vector)
 
 
-def spectral_green_lanczos(model, spin_type, abs_em_type, ref_vec_with_norm, ground_state_energy, omega):
+def spectral_green_lanczos(model, abs_em_type, ref_vec_with_norm, ground_state_energy, omega):
     """Calculates the Green function using the Lanczos method."""
-    if spin_type == 's':
-        def vec_by_hmltn(vec):
-            return model.multiply_vec_spinless_hmltn(vec)
-    elif spin_type == 'f':
-        def vec_by_hmltn(vec):
-            return model.multiply_vec_free_hmltn(vec)
-    elif spin_type == 'c':
-        def vec_by_hmltn(vec):
-            return model.multiply_vec_constrained_hmltn(vec)
-    else:
-        raise ValueError("spin_type must be 's', 'f' or 'c' for spinless, free or constrained models, respectively.")
-
     if abs_em_type == 'a':
         sign = -1
     elif abs_em_type == 'e':
@@ -440,7 +449,7 @@ def spectral_green_lanczos(model, spin_type, abs_em_type, ref_vec_with_norm, gro
     last_i = ref_vec_current.shape[0] - 1
     for i in range(ref_vec_current.shape[0]):
         norm_energy_array[i][0] = norm_current ** 2
-        ref_vec_multiplied_by_hmltn = vec_by_hmltn(ref_vec_current)
+        ref_vec_multiplied_by_hmltn = model.multiply_vec_hmltn(ref_vec_current)
         energy_diff = (np.vdot(ref_vec_current, ref_vec_multiplied_by_hmltn) - ground_state_energy).real
         # Casting to real only deletes numerical residue.
         ref_vec_new = ref_vec_multiplied_by_hmltn \
