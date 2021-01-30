@@ -415,7 +415,7 @@ def cr_an_operator_ampl(sign, side_size, atom_index, k_list):
      Sign should be 1 for creation, -1 for annihilation. Used in computing a_k^dag into a_(atom index)^dag.
      """
     return cmath.exp(sign * 2j * cmath.pi / side_size * (k_list[0] * (atom_index % side_size)
-                                                         + k_list[1] * (atom_index // side_size)))
+                                                         + k_list[1] * (atom_index // side_size))) / side_size
 
 
 def spinless_abs_ref_state(model_abs, model_orig, k_list):
