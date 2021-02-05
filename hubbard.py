@@ -287,8 +287,6 @@ def get_spin_vector_index(basis, vector):
     return lower_bound + inner_index
 
 
-
-
 def list_possible_spinless_square_hops(vector, number_of_electrons, side_size):
     """Returns all possible vectors (in vector form) for any given hop along with its sign."""
     square_hop_lookup = _LUTM.get_square_hop_lut(side_size)
