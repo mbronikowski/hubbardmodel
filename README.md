@@ -19,4 +19,4 @@ The main module is placed in the directory of your project and imported directly
 
 ## License
 
-The project is under an MIT license. Please read the LICENSE file for details.
+The project is under an MIT license held by its authors: Mateusz Bronikowski and Jacek Gębala. Please read the LICENSE file for details.
