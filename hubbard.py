@@ -448,12 +448,13 @@ def spectral_green_lanczos(model, abs_em_type, ref_vec_with_norm, ground_state_e
         raise ValueError("abs_em_type must be 'a' for absorption or 'e' for emission.")
 
     norm_current, ref_vec_current = ref_vec_with_norm
+    # TODO: Shouldn't it be O^dag |ref vec with norm> instead of plain ref vec with norm?
     ref_vec_prev = np.zeros(ref_vec_current.shape, dtype=ref_vec_current.dtype)
     norm_energy_array = np.empty((ref_vec_current.shape[0], 2))     # Holds k_i^2 and Delta eps_i
 
     last_i = ref_vec_current.shape[0] - 1
     for i in range(ref_vec_current.shape[0]):
-        norm_energy_array[i][0] = norm_current # Why are we squaring this?  ** 2
+        norm_energy_array[i][0] = norm_current             # TODO: this was squared here, bug?
         ref_vec_multiplied_by_hmltn = model.multiply_vec_hmltn(ref_vec_current)
         energy_diff = (np.vdot(ref_vec_current, ref_vec_multiplied_by_hmltn) - ground_state_energy).real
         # Casting to real only deletes numerical residue.
