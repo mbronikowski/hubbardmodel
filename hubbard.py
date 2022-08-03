@@ -306,9 +306,9 @@ def list_possible_spinless_square_hops(vector, number_of_electrons, side_size):
                     resulting_vectors[0][0] += 1
                     resulting_vectors[0][resulting_vectors[0][0]] = (vector | (1 << hop_bit)) & ~ (2 ** source_bit)
                     if (no_of_source_el - no_of_passed_els) % 2:
-                        resulting_vectors[1][resulting_vectors[0][0]] = -2
+                        resulting_vectors[1][resulting_vectors[0][0]] = -1
                     else:
-                        resulting_vectors[1][resulting_vectors[0][0]] = 2
+                        resulting_vectors[1][resulting_vectors[0][0]] = 1
     result_view = resulting_vectors[:, 1: resulting_vectors[0][0] + 1]
     return result_view[:, result_view[0, :].argsort()]
 
@@ -434,7 +434,8 @@ def spinless_abs_ref_state(model_abs, model_orig, k_list):
             if not orig_vector & (1 << atom_index):    # "If the atom is free to absorb an electron"
                 abs_vector_index = get_spinless_vector_index(model_abs.basis, orig_vector + (1 << atom_index))
                 result_vector[abs_vector_index] += ground_state[orig_index] \
-                                                 * cr_an_operator_ampl(1, model_abs.side, atom_index, k_list)
+                                                 * cr_an_operator_ampl(-1, model_abs.side, atom_index, k_list)
+            # Sign -1 for absorption
     return _normalize(result_vector)
 
 
