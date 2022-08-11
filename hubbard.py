@@ -148,7 +148,7 @@ class SquareConstrainedModel:
         self.basis = generate_constrained_basis(self.no_electrons, self.no_plus_spins, self.no_atoms)
         self.hmltn_linop = sparse.linalg.LinearOperator((self.basis.shape[0],
                                                          self.basis.shape[0]),
-                                                        matvec=self._multiply_vec_no_hmltn)
+                                                       matvec=self._multiply_vec_no_hmltn)
         self.hamiltonian_exists = False
         self.hamiltonian = None
         self.spin_type = "constrained"
@@ -417,10 +417,28 @@ def cr_an_operator_ampl(sign, side_size, atom_index, k_list):
     """Computes the amplitude of the creation/annihilation operator in real space when
      the operator is originally in the reciprocal space.
 
-     Sign should be 1 for creation, -1 for annihilation. Used in computing a_k^dag into a_(atom index)^dag.
+     Sign should be -1 for creation, 1 for annihilation. Used in computing a_k^dag into a_(atom index)^dag.
+     Creation: create an electron, emit a photon. Annihilation: annihilate an electron, absorb a photon.
      """
     return cmath.exp(sign * 2j * cmath.pi / side_size * (k_list[0] * (atom_index % side_size)
                                                          + k_list[1] * (atom_index // side_size))) / side_size
+
+
+def spinless_em_ref_state(model_em, model_orig, k_list):
+    """Generates the 0th reference state for spinless emission, i. e. a_k^dag * ground state."""
+    # em - photon emitted, orig - original
+    ground_state = model_orig.get_ground_state()[1]
+    result_vector = np.zeros(model_em.basis.shape[0], dtype=complex)
+    for orig_index in range(ground_state.shape[0]):
+        orig_vector = model_orig.basis[orig_index]
+        for atom_index in range(model_em.no_atoms):
+            if not orig_vector & (1 << atom_index):    # "If the atom is free to absorb an electron and emit a photon"
+                em_vector_index = get_spinless_vector_index(model_em.basis, orig_vector + (1 << atom_index))
+                result_vector[em_vector_index] += ground_state[orig_index] \
+                    * cr_an_operator_ampl(-1, model_em.side, atom_index, k_list)
+            # Sign -1 for emission of a photon
+            # TODO: replace multiplication by cr_an_operator_ampl by pre-generated array
+    return _normalize(result_vector)
 
 
 def spinless_abs_ref_state(model_abs, model_orig, k_list):
@@ -431,20 +449,21 @@ def spinless_abs_ref_state(model_abs, model_orig, k_list):
     for orig_index in range(ground_state.shape[0]):
         orig_vector = model_orig.basis[orig_index]
         for atom_index in range(model_abs.no_atoms):
-            if not orig_vector & (1 << atom_index):    # "If the atom is free to absorb an electron"
-                abs_vector_index = get_spinless_vector_index(model_abs.basis, orig_vector + (1 << atom_index))
+            if orig_vector & (1 << atom_index):    # "If the atom has an electron which can be annihilated"
+                abs_vector_index = get_spinless_vector_index(model_abs.basis, orig_vector - (1 << atom_index))
                 result_vector[abs_vector_index] += ground_state[orig_index] \
-                                                 * cr_an_operator_ampl(-1, model_abs.side, atom_index, k_list)
-            # Sign -1 for absorption
+                    * cr_an_operator_ampl(1, model_abs.side, atom_index, k_list)
+            # Sign +1 for absorption of a photon
+            # TODO: replace multiplication by cr_an_operator_ampl by pre-generated array
     return _normalize(result_vector)
 
 
 def spectral_green_lanczos(model, abs_em_type, ref_vec_with_norm, ground_state_energy, omega):
     """Calculates the Green function using the Lanczos method."""
     if abs_em_type == 'a':
-        sign = -1
-    elif abs_em_type == 'e':
         sign = 1
+    elif abs_em_type == 'e':
+        sign = -1
     else:
         raise ValueError("abs_em_type must be 'a' for absorption or 'e' for emission.")
 
