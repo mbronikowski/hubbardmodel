@@ -148,7 +148,7 @@ class SquareConstrainedModel:
         self.basis = generate_constrained_basis(self.no_electrons, self.no_plus_spins, self.no_atoms)
         self.hmltn_linop = sparse.linalg.LinearOperator((self.basis.shape[0],
                                                          self.basis.shape[0]),
-                                                        matvec=self._multiply_vec_no_hmltn)
+                                                       matvec=self._multiply_vec_no_hmltn)
         self.hamiltonian_exists = False
         self.hamiltonian = None
         self.spin_type = "constrained"
@@ -293,14 +293,19 @@ def list_possible_spinless_square_hops(vector, number_of_electrons, side_size):
     number_of_sites = side_size ** 2
     resulting_vectors = np.empty((2, 4 * number_of_electrons + 1), dtype=int)
     resulting_vectors[0][0] = 0  # The 0th element holds the number of found hops.
+    no_of_source_el = 0
     for source_bit in range(number_of_sites):
         if vector >> source_bit & 1:
+            no_of_source_el += 1
             hops = square_hop_lookup[source_bit] & ~ vector
+            no_of_passed_els = 0
             for hop_bit in range(number_of_sites):
+                if (vector >> hop_bit & 1) and hop_bit != source_bit:
+                    no_of_passed_els += 1
                 if hops >> hop_bit & 1:
                     resulting_vectors[0][0] += 1
                     resulting_vectors[0][resulting_vectors[0][0]] = (vector | (1 << hop_bit)) & ~ (2 ** source_bit)
-                    if (source_bit - hop_bit) % 2:
+                    if (no_of_source_el - no_of_passed_els) % 2:
                         resulting_vectors[1][resulting_vectors[0][0]] = -1
                     else:
                         resulting_vectors[1][resulting_vectors[0][0]] = 1
@@ -309,7 +314,7 @@ def list_possible_spinless_square_hops(vector, number_of_electrons, side_size):
 
 
 def spinless_square_hamiltonian(basis, number_of_electrons, side_size):
-    hamiltonian = sparse.dok_matrix((basis.size, basis.size), dtype=np.double)
+    hamiltonian = sparse.dok_matrix((basis.size, basis.size), dtype=np.float)
     it_basis = np.nditer(basis, flags=['f_index'])
     while not it_basis.finished:
         vecs_to_add = list_possible_spinless_square_hops(basis[it_basis.index], number_of_electrons, side_size)
@@ -348,7 +353,7 @@ def list_possible_free_square_hop_indices(basis, vector, number_of_positive_spin
 
 def free_square_hamiltonian(basis, number_of_electrons, number_of_positive_spins, side_size):
     number_of_negative_spins = number_of_electrons - number_of_positive_spins
-    hamiltonian = sparse.dok_matrix((basis[:, 0].size, basis[:, 0].size), dtype=np.double)
+    hamiltonian = sparse.dok_matrix((basis[:, 0].size, basis[:, 0].size), dtype=np.float)
     it_basis = np.nditer(basis[:, 0], flags=['f_index'])
     while not it_basis.finished:
         vecs_to_add = list_possible_free_square_hop_indices(basis, basis[it_basis.index],
@@ -394,7 +399,7 @@ def list_possible_constrained_square_hop_indices(basis, vector, number_of_positi
 
 def constrained_square_hamiltonian(basis, number_of_electrons, number_of_positive_spins, side_size):
     number_of_negative_spins = number_of_electrons - number_of_positive_spins
-    hamiltonian = sparse.dok_matrix((basis[:, 0].size, basis[:, 0].size), dtype=np.double)
+    hamiltonian = sparse.dok_matrix((basis[:, 0].size, basis[:, 0].size), dtype=np.float)
     it_basis = np.nditer(basis[:, 0], flags=['f_index'])
     while not it_basis.finished:
         vecs_to_add = list_possible_constrained_square_hop_indices(basis, basis[it_basis.index],
@@ -412,10 +417,28 @@ def cr_an_operator_ampl(sign, side_size, atom_index, k_list):
     """Computes the amplitude of the creation/annihilation operator in real space when
      the operator is originally in the reciprocal space.
 
-     Sign should be 1 for creation, -1 for annihilation. Used in computing a_k^dag into a_(atom index)^dag.
+     Sign should be -1 for creation, 1 for annihilation. Used in computing a_k^dag into a_(atom index)^dag.
+     Creation: create an electron, emit a photon. Annihilation: annihilate an electron, absorb a photon.
      """
     return cmath.exp(sign * 2j * cmath.pi / side_size * (k_list[0] * (atom_index % side_size)
                                                          + k_list[1] * (atom_index // side_size))) / side_size
+
+
+def spinless_em_ref_state(model_em, model_orig, k_list):
+    """Generates the 0th reference state for spinless emission, i. e. a_k^dag * ground state."""
+    # em - photon emitted, orig - original
+    ground_state = model_orig.get_ground_state()[1]
+    result_vector = np.zeros(model_em.basis.shape[0], dtype=complex)
+    for orig_index in range(ground_state.shape[0]):
+        orig_vector = model_orig.basis[orig_index]
+        for atom_index in range(model_em.no_atoms):
+            if not orig_vector & (1 << atom_index):    # "If the atom is free to absorb an electron and emit a photon"
+                em_vector_index = get_spinless_vector_index(model_em.basis, orig_vector + (1 << atom_index))
+                result_vector[em_vector_index] += ground_state[orig_index] \
+                    * cr_an_operator_ampl(-1, model_em.side, atom_index, k_list)
+            # Sign -1 for emission of a photon
+            # TODO: replace multiplication by cr_an_operator_ampl by pre-generated array
+    return _normalize(result_vector)
 
 
 def spinless_abs_ref_state(model_abs, model_orig, k_list):
@@ -426,29 +449,32 @@ def spinless_abs_ref_state(model_abs, model_orig, k_list):
     for orig_index in range(ground_state.shape[0]):
         orig_vector = model_orig.basis[orig_index]
         for atom_index in range(model_abs.no_atoms):
-            if not orig_vector & (1 << atom_index):    # "If the atom is free to absorb an electron"
-                abs_vector_index = get_spinless_vector_index(model_abs.basis, orig_vector + (1 << atom_index))
+            if orig_vector & (1 << atom_index):    # "If the atom has an electron which can be annihilated"
+                abs_vector_index = get_spinless_vector_index(model_abs.basis, orig_vector - (1 << atom_index))
                 result_vector[abs_vector_index] += ground_state[orig_index] \
-                                                 * cr_an_operator_ampl(1, model_abs.side, atom_index, k_list)
+                    * cr_an_operator_ampl(1, model_abs.side, atom_index, k_list)
+            # Sign +1 for absorption of a photon
+            # TODO: replace multiplication by cr_an_operator_ampl by pre-generated array
     return _normalize(result_vector)
 
 
 def spectral_green_lanczos(model, abs_em_type, ref_vec_with_norm, ground_state_energy, omega):
     """Calculates the Green function using the Lanczos method."""
     if abs_em_type == 'a':
-        sign = -1
-    elif abs_em_type == 'e':
         sign = 1
+    elif abs_em_type == 'e':
+        sign = -1
     else:
         raise ValueError("abs_em_type must be 'a' for absorption or 'e' for emission.")
 
     norm_current, ref_vec_current = ref_vec_with_norm
+    # TODO: Shouldn't it be O^dag |ref vec with norm> instead of plain ref vec with norm?
     ref_vec_prev = np.zeros(ref_vec_current.shape, dtype=ref_vec_current.dtype)
     norm_energy_array = np.empty((ref_vec_current.shape[0], 2))     # Holds k_i^2 and Delta eps_i
 
     last_i = ref_vec_current.shape[0] - 1
     for i in range(ref_vec_current.shape[0]):
-        norm_energy_array[i][0] = norm_current ** 2
+        norm_energy_array[i][0] = norm_current             # TODO: this was squared here, bug?
         ref_vec_multiplied_by_hmltn = model.multiply_vec_hmltn(ref_vec_current)
         energy_diff = (np.vdot(ref_vec_current, ref_vec_multiplied_by_hmltn) - ground_state_energy).real
         # Casting to real only deletes numerical residue.

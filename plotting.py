@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 def print_square_spinless_vector(vector, side_size):
@@ -29,3 +30,7 @@ def print_square_spin_vector(vector, side_size):
                 print('0', end=end_char)
         print(']')
 
+
+def show_2d_plot(x_data, y_data):
+    plt.plot(x_data, y_data)
+    plt.show()
